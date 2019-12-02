@@ -1,6 +1,7 @@
 library(dplyr)
 library(magrittr)
 library(readr)
+library(challengescoring)
 
 ###made up data until i get the real stuff
 pred <- dplyr::tribble(
@@ -73,22 +74,100 @@ validate <- function(prediction_path, gold_path, hgnc_ids){
   }
 }
 
+# for testing
+#
+# template <- read_csv('template.csv')
+# 
+# challenge_targets <- template$target
+# 
+# pred <- template %>% 
+#   mutate_at(vars(-target), ~ rnorm(length(.), mean = 0.5, sd = 0.2)) 
 
-bootstrapped_score <- function(prediction_path, gold_path){
-  
-  ###placeholder
-  
+
+frac_overlap <- function(gold, pred){
+  sum(gold %in% pred)/length(gold)
 }
 
-score <- function(prediction_path, gold_path){
+mean_rank <- function(gold, pred){
+  sapply(gold, function(x){
+    
+  })
+}
+
+score <- function(prediction_path,
+                  gold_path,
+                  null_model_path,
+                  gold_targets_path){
   
-  pred <- readr::read_csv(prediction_path)
-  gold <- readr::read_csv(gold_path)
+  targets <- read_csv(gold_targets_path)
+  gold <- read_csv(gold_path) 
+  pred <- read_csv(prediction_path) %>% 
+    filter(target %in% targets)
   
-  df <- dplyr::full_join(pred, gold)
+  ###SC1 
   
-  score <- function(x){} ###TBD
+  null_model <- read_rds('null_model.rds')
+  
+  gold_df <- gold %>% 
+    select(-cmpd) %>% 
+    group_by(cmpd_id) %>% 
+    nest()
+  
+  pred_df <- pred %>% 
+    gather(cmpd_id, confidence ,-target) %>% 
+    group_by(cmpd_id) %>% 
+    arrange(-confidence, target) %>% 
+    slice(1:10) %>% 
+    nest() ##instead of top n. We eliminate ties alphabetically!
+  
+  vals <- sapply(null_model, function(x){
+    
+    join <- inner_join(gold_df, pred_df, by = 'cmpd_id', suffix = c("_gold", "_pred")) %>% 
+      inner_join(x, by = 'cmpd_id') %>% 
+      mutate(gold_pred = map2(data_gold, data_pred, function(x,y){
+        frac_overlap(x$target, y$target)
+      })) %>% 
+      mutate(gold_null = map2(data_gold, data, function(x,y){
+        frac_overlap(x$target, y$target_random)
+      })) %>% 
+      select(cmpd_id, gold_pred, gold_null) %>% 
+      unnest(c(gold_pred, gold_null)) %>% 
+      ungroup() %>% 
+      summarize(pval = t.test(x = gold_pred, y= gold_null, paired = T)$p.value) %>% 
+      purrr::pluck('pval')
+  
+  if(is.nan(join)){
+    join <- 1
+  }
+  join
+  
+  })
+  
+  sc1 <- mean(vals) %>% signif(3)
+
+  ##SC2
+  
+  pred_sc2 <- pred %>% 
+    gather(cmpd_id, confidence ,-target) %>% 
+    group_by(cmpd_id) %>% 
+    arrange(-confidence, target) %>% 
+    nest()
+  
+  gold_sc2 <- gold %>% 
+    select(-cmpd) %>% 
+    group_by(cmpd_id) %>% 
+    nest()
+  
+  sc2 <- gold_sc2 %>% 
+    inner_join(pred_sc2, by = 'cmpd_id', suffix = c("_gold", "_pred")) %>% 
+    mutate(gold_pred = map2(data_gold, data_pred, function(x,y){
+      frac_overlap(x$target, y$target)
+    })) 
+  
+  score <- c("sc1" = sc1, 
+             "sc2" = sc2)
   
   return(score)
 }
+
 
