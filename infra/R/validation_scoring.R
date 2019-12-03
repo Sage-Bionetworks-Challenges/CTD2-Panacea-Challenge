@@ -1,7 +1,6 @@
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(readr))
-suppressPackageStartupMessages(library(challengescoring))
 
 trim_vec <- function(vec, trim = 10){
   if(length(vec) > trim){
@@ -43,7 +42,7 @@ validate <- function(prediction_path, template_path){
     errs["nrow_long"] <- paste0("Prediction file has extra  rows ", nrow(pred), " rows detected.")
   }
   
-  if(isTRUE(colnames(pred) %in% template)){
+  if(isTRUE(colnames(pred) %in% temp)){
     errs["colnames"] <- paste0("Column names are not correct. Column names must be ", cat(colnames_req))
   }
   
