@@ -59,6 +59,8 @@ validate <- function(prediction_path, template_path){
     invalid <- unique(pred$target[!pred$target %in% target_ids]) %>% trim_vec()
     errs["non_target"] <- paste0("Invalid target identifiers were included in your prediction file (up to 10 displayed): ", invalid)
   }
+  
+  return(errs)
 }
 
  
@@ -97,9 +99,9 @@ score <- function(prediction_path,
     arrange(cmpd_id) %>% 
     group_by(cmpd_id) %>% 
     arrange(-confidence, target) %>% 
-    slice(1:10) %>% 
+    slice(1:10) %>%  ##instead of top n. We eliminate ties alphabetically!
     nest() %>% 
-    arrange(cmpd_id) ##instead of top n. We eliminate ties alphabetically!
+    arrange(cmpd_id)
   
   sc1_vals <- sapply(null_model, function(x){
     
@@ -117,6 +119,7 @@ score <- function(prediction_path,
       summarize(pval = t.test(x = gold_pred, y= gold_null, paired = T)$p.value) %>% 
       purrr::pluck('pval')
   
+
   if(is.nan(join)){
     join <- 1
   }
@@ -124,7 +127,7 @@ score <- function(prediction_path,
   
   })
   
-  sc1 <- mean(-log10(sc1_vals)) %>% signif(5)
+  sc1 <- mean(-log2(sc1_vals)) %>% signif(5)
 
   ##SC2
   
@@ -167,7 +170,7 @@ score <- function(prediction_path,
     
   })
   
-  sc2 <- mean(-log10(sc2_vals)) %>% signif(5)
+  sc2 <- mean(-log2(sc2_vals)) %>% signif(5)
   
   score <- c("sc1" = sc1, 
              "sc2" = sc2)
