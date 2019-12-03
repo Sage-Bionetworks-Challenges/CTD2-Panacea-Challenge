@@ -3,124 +3,97 @@ library(magrittr)
 library(readr)
 library(challengescoring)
 
-###made up data until i get the real stuff
-pred <- dplyr::tribble(
-  ~compound_id, ~hgnc_id, ~confidence,
-  "drugA", 'AURdfKA', 0.9,
-  "drugA", 'AURKB', 0.1
-)
-
-gold <- dplyr::tribble(
-  ~compound_id, ~target, ~rank,
-  "drugA", 'AURKA', 10,
-  "drugB", 'AURKB', 9
-)
-
-validate <- function(prediction_path, gold_path, hgnc_ids){
-  
-  pred <- readr::read_csv(prediction_path)
-  gold <- readr::read_csv(gold_path)
-  
-  ###configure validation
-  ncol_req <- 3
-  colnames_req <-  c('compound_id', 'hgnc_id', 'confidence')
-  compound_ids <- unique(gold$compound_id)
-  
-  ###
-  hgnc_ids <- readr::read_tsv("hgnc_ids.txt") %>%  
-    dplyr::filter(Status == "Approved") %>% 
-    dplyr::pull('Approved symbol') 
-  
-  errs <- list()
-  
-  trim_vec <- function(vec, trim = 10){
-    if(length(vec) > trim){
-      vec <- vec[1:trim]
-      vec <- as.character(vec)
-      vec[11] <- '...'
-    }else{
-      vec
-    }
-  }
-
-  if(ncol(pred)<ncol_req){
-    errs["ncol_short"] <- paste0("Prediction file is missing rows. Only ", ncol(pred), " rows detected.")
-  }
-  
-  if(ncol(pred)<ncol_req){
-    errs["ncol_long"] <- paste0("Prediction file is missing rows. ", ncol(pred), " rows detected.")
-  }
-  
-  if(isTRUE(colnames(pred) %in% colnames_req)){
-    errs["colnames"] <- paste0("Column names are not correct. Column names must be ", cat(colnames_req))
-  }
-  
-  if(!identical(pred$id, gold$id)){
-    errs["id_mismatch"] <- paste0("Prediction file id column does not have matching values to gold standard file.")
-  }
-  
-  if(!is.numeric(pred$confidence)){
-    errs["non_numeric"] <- paste0("Predictions are not all numeric values.")
-  }
-  
-  if(any(!pred$hgnc_id %in% hgnc_ids)){
-    invalid <- unique(pred$hgnc_id[!pred$hgnc_id %in% hgnc_ids]) %>% trim_vec()
-    errs["non_hgnc"] <- paste0("Invalid HGNC identifiers were included in your prediction file (up to 10 displayed): ", invalid)
-  }
-  
-  if(all(gold$compound_id %in% pred$compound_id)){
-    missing <- unique(gold$compound_id[!gold$compound_id %in% pred$compound_id]) %>% trim_vec()
-    errs["non_hgnc"] <- paste0("Missing compound_ids (up to 10 displayed): ", missing)
+trim_vec <- function(vec, trim = 10){
+  if(length(vec) > trim){
+    vec <- vec[1:trim]
+    vec <- as.character(vec)
+    vec[trim+1] <- '...'
+  }else{
+    vec
   }
 }
 
-# for testing
-#
-# template <- read_csv('template.csv')
-# 
-# challenge_targets <- template$target
-# 
-# pred <- template %>% 
-#   mutate_at(vars(-target), ~ rnorm(length(.), mean = 0.5, sd = 0.2)) 
+validate <- function(prediction_path, template_path){
+  
+  pred <- readr::read_csv(prediction_path)
+  temp <- readr::read_csv(template_path)
+  
+  ###configure validation
+  ncol_req <- ncol(temp)
+  nrow_req <- nrow(temp)
+  colnames_req <- colnames(temp)
+  target_ids <- unique(temp$target)
+  
 
+  errs <- list()
 
+  if(ncol(pred)<ncol_req){
+    errs["ncol_short"] <- paste0("Prediction file is missing cols. Only ", ncol(pred), " cols detected.")
+  }
+  
+  if(ncol(pred)>ncol_req){
+    errs["ncol_long"] <- paste0("Prediction file has extra  cols ", ncol(pred), " cols detected.")
+  }
+  
+  if(nrow(pred)<nrow_req){
+    errs["nrow_short"] <- paste0("Prediction file is missing rows Only ", nrow(pred), " rows detected.")
+  }
+  
+  if(nrow(pred)>nrow_req){
+    errs["nrow_long"] <- paste0("Prediction file has extra  rows ", nrow(pred), " rows detected.")
+  }
+  
+  if(isTRUE(colnames(pred) %in% template)){
+    errs["colnames"] <- paste0("Column names are not correct. Column names must be ", cat(colnames_req))
+  }
+  
+  if(!all(pred[-1] > 0) | !all(pred[-1] < 1)){
+    errs["wrong_range"] <- paste0("Confidence values are not between 0 and 1.")
+  }
+  
+  if(!all(apply(pred[-1], 1:2, is.numeric))){
+    errs["non_numeric"] <- paste0("Predictions are not all numeric values.")
+  }
+  
+  if(any(!pred$target %in% target_ids)){
+    invalid <- unique(pred$target[!pred$target %in% target_ids]) %>% trim_vec()
+    errs["non_target"] <- paste0("Invalid target identifiers were included in your prediction file (up to 10 displayed): ", invalid)
+  }
+}
+
+ 
 frac_overlap <- function(gold, pred){
   sum(gold %in% pred)/length(gold)
 }
 
-mean_rank <- function(gold, pred){
-  sapply(gold, function(x){
-    
-  })
-}
-
 score <- function(prediction_path,
                   gold_path,
-                  null_model_path,
-                  gold_targets_path){
+                  null_model_path_sc1, 
+                  null_model_path_sc2){
   
-  targets <- read_csv(gold_targets_path)
   gold <- read_csv(gold_path) 
-  pred <- read_csv(prediction_path) %>% 
-    filter(target %in% targets)
+  pred <- read_csv(prediction_path)   
   
   ###SC1 
   
-  null_model <- read_rds('null_model.rds')
+  null_model <- read_rds(null_model_path_sc1)
   
   gold_df <- gold %>% 
     select(-cmpd) %>% 
     group_by(cmpd_id) %>% 
-    nest()
+    nest() %>% 
+    arrange(cmpd_id)
   
   pred_df <- pred %>% 
     gather(cmpd_id, confidence ,-target) %>% 
+    arrange(cmpd_id) %>% 
     group_by(cmpd_id) %>% 
     arrange(-confidence, target) %>% 
     slice(1:10) %>% 
-    nest() ##instead of top n. We eliminate ties alphabetically!
+    nest() %>% 
+    arrange(cmpd_id) ##instead of top n. We eliminate ties alphabetically!
   
-  vals <- sapply(null_model, function(x){
+  sc1_vals <- sapply(null_model, function(x){
     
     join <- inner_join(gold_df, pred_df, by = 'cmpd_id', suffix = c("_gold", "_pred")) %>% 
       inner_join(x, by = 'cmpd_id') %>% 
@@ -143,26 +116,49 @@ score <- function(prediction_path,
   
   })
   
-  sc1 <- mean(vals) %>% signif(3)
+  sc1 <- mean(-log10(sc1_vals)) %>% signif(3)
 
   ##SC2
+  
+  null_model <- read_rds(null_model_path_sc2)
   
   pred_sc2 <- pred %>% 
     gather(cmpd_id, confidence ,-target) %>% 
     group_by(cmpd_id) %>% 
     arrange(-confidence, target) %>% 
-    nest()
+    nest() %>% 
+    arrange(cmpd_id)
   
   gold_sc2 <- gold %>% 
     select(-cmpd) %>% 
     group_by(cmpd_id) %>% 
-    nest()
+    nest() %>% 
+    arrange(cmpd_id) 
   
-  sc2 <- gold_sc2 %>% 
-    inner_join(pred_sc2, by = 'cmpd_id', suffix = c("_gold", "_pred")) %>% 
-    mutate(gold_pred = map2(data_gold, data_pred, function(x,y){
-      frac_overlap(x$target, y$target)
-    })) 
+  sc2_vals <- sapply(null_model, function(x){
+    
+    join <- inner_join(gold_sc2, pred_sc2, by = 'cmpd_id', suffix = c("_gold", "_pred")) %>% 
+      inner_join(x, by = 'cmpd_id') %>% 
+      mutate(gold_pred = map2(data_gold, data_pred, function(x,y){
+        match(x$target, y$target) %>% unique()
+      })) %>% 
+      mutate(gold_null = map2(data_gold, data, function(x,y){
+        match(x$target, y$target_random) %>% unique()
+      })) %>% 
+      select(cmpd_id, gold_pred, gold_null) %>% 
+      unnest(c(gold_pred, gold_null)) %>% 
+      ungroup() %>% 
+      summarize(pval = t.test(x = gold_pred, y= gold_null, paired = T)$p.value) %>% 
+      purrr::pluck('pval')
+    
+    if(is.nan(join)){
+      join <- 1
+    }
+    join
+    
+  })
+  
+  sc2 <- mean(-log10(sc2_vals)) %>% signif(3)
   
   score <- c("sc1" = sc1, 
              "sc2" = sc2)
@@ -171,3 +167,22 @@ score <- function(prediction_path,
 }
 
 
+
+# for testing
+template <- read_csv('template.csv')
+challenge_targets <- template$target
+pred <- template %>% 
+  mutate_at(vars(-target), ~ rnorm(length(.), mean = 0.5, sd = 0.2)) %>% 
+  write_csv('testpred.csv')
+
+
+
+score("testpred.csv",
+      "panacea_gold_standard.csv",
+      "null_model_sc1_leaderboard.rds",
+      "null_model_sc2_leaderboard.rds")
+
+score("testpred.csv",
+      "panacea_gold_standard.csv",
+      "null_model_sc1.rds",
+      "null_model_sc2.rds")
