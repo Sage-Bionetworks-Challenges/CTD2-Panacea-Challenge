@@ -24,7 +24,6 @@ validate <- function(prediction_path, template_path){
   colnames_req <- colnames(temp)
   target_ids <- unique(temp$target)
   
-
   errs <- list()
 
   if(ncol(pred)<ncol_req){
