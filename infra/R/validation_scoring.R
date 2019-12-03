@@ -1,7 +1,7 @@
-library(dplyr)
-library(magrittr)
-library(readr)
-library(challengescoring)
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(challengescoring))
 
 trim_vec <- function(vec, trim = 10){
   if(length(vec) > trim){
@@ -69,14 +69,22 @@ frac_overlap <- function(gold, pred){
 score <- function(prediction_path,
                   gold_path,
                   null_model_path_sc1, 
-                  null_model_path_sc2){
+                  null_model_path_sc2,
+                  round = c("leaderboard", "final")){
   
-  gold <- read_csv(gold_path) 
-  pred <- read_csv(prediction_path)   
+  if(round == "leaderboard"){
+    random_sample <- 5
+  }else if(round == "final"){
+    random_sample <- expr(length(null_model)) ##to be evaluated later
+  }
+
+  gold <- suppressMessages(read_csv(gold_path))
+  pred <- suppressMessages(read_csv(prediction_path))
   
   ###SC1 
   
   null_model <- read_rds(null_model_path_sc1)
+  null_model <- sample(null_model, eval(random_sample))
   
   gold_df <- gold %>% 
     select(-cmpd) %>% 
@@ -116,11 +124,12 @@ score <- function(prediction_path,
   
   })
   
-  sc1 <- mean(-log10(sc1_vals)) %>% signif(3)
+  sc1 <- mean(-log10(sc1_vals)) %>% signif(5)
 
   ##SC2
   
-  null_model <- read_rds(null_model_path_sc2)
+  null_model <- read_rds(null_model_path_sc2) 
+  null_model <- sample(null_model, eval(random_sample))  
   
   pred_sc2 <- pred %>% 
     gather(cmpd_id, confidence ,-target) %>% 
@@ -158,7 +167,7 @@ score <- function(prediction_path,
     
   })
   
-  sc2 <- mean(-log10(sc2_vals)) %>% signif(3)
+  sc2 <- mean(-log10(sc2_vals)) %>% signif(5)
   
   score <- c("sc1" = sc1, 
              "sc2" = sc2)
@@ -168,21 +177,3 @@ score <- function(prediction_path,
 
 
 
-# for testing
-template <- read_csv('template.csv')
-challenge_targets <- template$target
-pred <- template %>% 
-  mutate_at(vars(-target), ~ rnorm(length(.), mean = 0.5, sd = 0.2)) %>% 
-  write_csv('testpred.csv')
-
-
-
-score("testpred.csv",
-      "panacea_gold_standard.csv",
-      "null_model_sc1_leaderboard.rds",
-      "null_model_sc2_leaderboard.rds")
-
-score("testpred.csv",
-      "panacea_gold_standard.csv",
-      "null_model_sc1.rds",
-      "null_model_sc2.rds")

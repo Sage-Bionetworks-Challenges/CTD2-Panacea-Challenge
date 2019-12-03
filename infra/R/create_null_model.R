@@ -31,5 +31,5 @@ null_model_sc2 <- lapply(1:1000, function(x){
 write_rds(null_model_sc1, 'null_model_sc1.rds')
 write_rds(null_model_sc2, 'null_model_sc2.rds')
 
-write_rds(null_model_sc1[1:10], 'null_model_sc1_leaderboard.rds')
-write_rds(null_model_sc2[1:10], 'null_model_sc2_leaderboard.rds')
+write_rds(null_model_sc1[1:100], 'null_model_sc1_leaderboard.rds')
+write_rds(null_model_sc2[1:100], 'null_model_sc2_leaderboard.rds')
