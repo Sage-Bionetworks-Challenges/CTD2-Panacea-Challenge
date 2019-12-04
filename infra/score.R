@@ -1,7 +1,7 @@
 library(argparse)
 library(rjson)
 
-source("R/validation_scoring.R")
+source("/usr/local/bin/validation_scoring.R")
 
 parser = ArgumentParser()
 
@@ -43,8 +43,8 @@ scores <- score(args$inputfile, args$goldstandard,
 
 result_list <- list(
     "prediction_file_status" = "SCORED",
-    "sc1_score" = scores$sc1,
-    "sc2_score" = scores$sc2
+    "sc1_score" = scores[[1]],
+    "sc2_score" = scores[[2]]
 )
 
 result_list %>%  

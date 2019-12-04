@@ -1,6 +1,8 @@
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(purrr))
 
 trim_vec <- function(vec, trim = 10){
   if(length(vec) > trim){

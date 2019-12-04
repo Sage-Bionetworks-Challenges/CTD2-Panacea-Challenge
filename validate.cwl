@@ -4,7 +4,7 @@
 #
 cwlVersion: v1.0
 class: CommandLineTool
-baseCommand: validate.R
+baseCommand: [Rscript, /usr/local/bin/validate.R]
 
 hints:
   DockerRequirement:
@@ -18,11 +18,11 @@ inputs:
 
 arguments:
   - valueFrom: $(inputs.inputfile.path)
-    prefix: -s
+    prefix: --inputfile
   - valueFrom: $(inputs.template.path)
-    prefix: -t
+    prefix: --template
   - valueFrom: results.json
-    prefix: -r
+    prefix: --results
 
 requirements:
   - class: InlineJavascriptRequirement

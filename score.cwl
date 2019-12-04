@@ -4,7 +4,7 @@
 #
 cwlVersion: v1.0
 class: CommandLineTool
-baseCommand: score.R
+baseCommand: [Rscript, /usr/local/bin/score.R]
 
 hints:
   DockerRequirement:
@@ -20,11 +20,17 @@ inputs:
 
 arguments:
   - valueFrom: $(inputs.inputfile.path)
-    prefix: -f
+    prefix: --inputfile
   - valueFrom: $(inputs.goldstandard.path)
-    prefix: -g
+    prefix: --goldstandard
   - valueFrom: results.json
-    prefix: -r
+    prefix: --results
+  - valueFrom: $(inputs.nullmodel1.path)
+    prefix: --nullmodel1
+  - valueFrom: $(inputs.nullmodel2.path)
+    prefix: --nullmodel2
+  - valueFrom: $(inputs.round)
+    prefix: --round
 
 requirements:
   - class: InlineJavascriptRequirement
