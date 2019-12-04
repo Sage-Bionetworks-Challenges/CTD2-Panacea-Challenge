@@ -15,6 +15,12 @@ inputs:
     type: File
   - id: goldstandard
     type: File
+  - id: nullmodel1
+    type: File
+  - id: nullmodel2
+    type: File
+  - id: round
+    type: string
   - id: check_validation_finished
     type: boolean?
 
