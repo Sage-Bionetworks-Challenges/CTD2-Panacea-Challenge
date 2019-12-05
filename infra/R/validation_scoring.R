@@ -47,7 +47,7 @@ validate <- function(prediction_path, template_path){
     errs["colnames"] <- paste0("Column names are not correct. Column names must be ", cat(colnames_req))
   }
   
-  if(!all(pred[-1] > 0) | !all(pred[-1] < 1)){
+  if(!(all(pred[-1] >= 0) & all(pred[-1] <= 1))){
     errs["wrong_range"] <- paste0("Confidence values are not between 0 and 1.")
   }
   
