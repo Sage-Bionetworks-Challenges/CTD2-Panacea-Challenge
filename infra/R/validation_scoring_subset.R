@@ -73,7 +73,8 @@ score <- function(prediction_path,
                   gold_path,
                   null_model_path_sc1, 
                   null_model_path_sc2,
-                  round = c("leaderboard", "final")){
+                  round = c("leaderboard", "final"),
+                  no_rand = 5){
   
   #most obnoxiously long vector of targets here
   
@@ -98,7 +99,7 @@ score <- function(prediction_path,
     "EPHA5","EPHB2","EPHB4","EPHA4","BTK","TEC","MAP3K1","LIMK1","LIMK2","PTK6","EPHB6","ACVR1B","TGFBR1")
   
   if(round == "leaderboard"){
-    random_sample <- 5
+    random_sample <- no_rand
   }else if(round == "final"){
     random_sample <- expr(length(null_model)) ##to be evaluated later
   }

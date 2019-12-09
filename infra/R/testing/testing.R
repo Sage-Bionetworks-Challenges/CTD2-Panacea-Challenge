@@ -97,14 +97,13 @@ for(i in 1:10){
   
   bar <- tribble(~sc1, ~sc2, ~null,  bar[1], bar[2], "leaderboard")
   
-  print(bar)
   foo <- foo %>% bind_rows(bar)
 }
 
 bar2 <- score(prediction_path = "random_pred.csv",
               gold_path = "panacea_gold_standard.csv",
-              null_model_path_sc1 = sc1_null,
-              null_model_path_sc2 = sc2_null,
+              null_model_path_sc1 = sc1_null_final,
+              null_model_path_sc2 = sc2_null_final,
               round = "final") 
 
 bar <- tribble(~sc1, ~sc2, ~null,  bar2[1], bar2[2], "final")
@@ -121,14 +120,13 @@ for(i in 1:10){
   
   bar <- tribble(~sc1, ~sc2, ~null,  bar[1], bar[2], "leaderboard")
   
-  print(bar)
   foo <- foo %>% bind_rows(bar)
 }
 
 bar2 <- score(prediction_path = "ok_pred.csv",
               gold_path = "panacea_gold_standard.csv",
-              null_model_path_sc1 = sc1_null,
-              null_model_path_sc2 = sc2_null,
+              null_model_path_sc1 = sc1_null_final,
+              null_model_path_sc2 = sc2_null_final,
               round = "final") 
 
 bar <- tribble(~sc1, ~sc2, ~null,  bar2[1], bar2[2], "final")
@@ -148,20 +146,18 @@ for(i in 1:10){
   
   bar <- tribble(~sc1, ~sc2, ~null,  bar[1], bar[2], "leaderboard")
   
-  print(bar)
   foo <- foo %>% bind_rows(bar)
 }
 
 bar2 <- score(prediction_path = "good_pred.csv",
               gold_path = "panacea_gold_standard.csv",
-              null_model_path_sc1 = sc1_null,
-              null_model_path_sc2 = sc2_null,
+              null_model_path_sc1 = sc1_final_lead,
+              null_model_path_sc2 = sc2_final_lead,
               round = "final") 
 
 bar <- tribble(~sc1, ~sc2, ~null,  bar2[1], bar2[2], "final")
 
 foo_plot_3 <- foo %>% bind_rows(bar) %>% gather(sc, score, -null) %>% mutate(pred = "good")
-
 
 foo <- tribble(~sc1, ~sc2, ~null)
 
@@ -174,14 +170,13 @@ for(i in 1:10){
   
   bar <- tribble(~sc1, ~sc2, ~null,  bar[1], bar[2], "leaderboard")
   
-  print(bar)
   foo <- foo %>% bind_rows(bar)
 }
 
 bar2 <- score(prediction_path = "perfect_pred.csv",
               gold_path = "panacea_gold_standard.csv",
-              null_model_path_sc1 = sc1_null,
-              null_model_path_sc2 = sc2_null,
+              null_model_path_sc1 = sc1_null_final,
+              null_model_path_sc2 = sc2_null_final,
               round = "final") 
 
 bar <- tribble(~sc1, ~sc2, ~null,  bar2[1], bar2[2], "final")
@@ -193,6 +188,91 @@ foo_all <- bind_rows(foo_plot_1, foo_plot_2, foo_plot_3, foo_plot_4)
 ggplot(foo_all %>% filter(sc == "sc1")) +
   geom_point(aes(x = pred, y = score, color = null), stat = "identity")
 
-
 ggplot(foo_all %>% filter(sc == "sc2")) +
   geom_point(aes(x = pred, y = score, color = null), stat = "identity")
+
+
+
+##### Test number of null models. 
+
+foo <- tribble(~sc1, ~sc2, ~null)
+
+for(j in c(1,5,10,15)){
+for(i in 1:10){
+  bar <- score(prediction_path = "ok_pred.csv",
+               gold_path = "panacea_gold_standard.csv",
+               null_model_path_sc1 = sc1_null_lead,
+               null_model_path_sc2 = sc2_null_lead,
+               round = "leaderboard",
+               no_rand = j)
+  
+  bar <- tribble(~sc1, ~sc2, ~null, ~no_rand,  bar[1], bar[2], "leaderboard", j)
+  
+  foo <- foo %>% bind_rows(bar)
+}
+}
+
+bar2 <- score(prediction_path = "ok_pred.csv",
+              gold_path = "panacea_gold_standard.csv",
+              null_model_path_sc1 = sc1_null_final,
+              null_model_path_sc2 = sc2_null_final,
+              round = "final") 
+
+bar <- tribble(~sc1, ~sc2, ~null, ~no_rand,  bar2[1], bar2[2], "final", 500)
+
+foo_plot_testing_null <- foo %>% bind_rows(bar) %>% gather(sc, score, -null, -no_rand) %>% mutate(pred = "ok")
+
+
+ggplot(foo_plot_testing_null %>% filter(sc == "sc1") %>% filter(no_rand != 500)) +
+  ggbeeswarm::geom_beeswarm(aes(x = factor(no_rand), y = score, color = no_rand, group= no_rand)) +
+  geom_hline(data = foo_plot_testing_null %>% filter(sc == "sc1") %>% filter(no_rand == 500),
+             aes(yintercept = score), color = 'red')
+
+ggplot(foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand != 500)) +
+  ggbeeswarm::geom_beeswarm(aes(x = factor(no_rand), y = score, color = no_rand, group= no_rand)) +
+  geom_hline(data = foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand == 500),
+             aes(yintercept = score), color = 'red')
+
+
+##Redo with Bence's best submission
+
+
+foo <- tribble(~sc1, ~sc2, ~null)
+
+for(j in c(1,5,10,15)){
+  for(i in 1:50){
+    bar <- score(prediction_path = "sim_rep.csv",
+                 gold_path = "panacea_gold_standard.csv",
+                 null_model_path_sc1 = sc1_null_lead,
+                 null_model_path_sc2 = sc2_null_lead,
+                 round = "leaderboard",
+                 no_rand = j)
+    
+    bar <- tribble(~sc1, ~sc2, ~null, ~no_rand,  bar[1], bar[2], "leaderboard", j)
+    
+    foo <- foo %>% bind_rows(bar)
+  }
+}
+
+bar2 <- score(prediction_path = "sim_rep.csv",
+              gold_path = "panacea_gold_standard.csv",
+              null_model_path_sc1 = sc1_null_final,
+              null_model_path_sc2 = sc2_null_final,
+              round = "final") 
+
+bar <- tribble(~sc1, ~sc2, ~null, ~no_rand,  bar2[1], bar2[2], "final", 500)
+
+foo_plot_testing_null <- foo %>% bind_rows(bar) %>% gather(sc, score, -null, -no_rand) %>% mutate(pred = "ok")
+
+
+ggplot(foo_plot_testing_null %>% filter(sc == "sc1") %>% filter(no_rand != 500)) +
+  ggbeeswarm::geom_beeswarm(aes(x = factor(no_rand), y = score, color = no_rand, group= no_rand)) +
+  geom_hline(data = foo_plot_testing_null %>% filter(sc == "sc1") %>% filter(no_rand == 500),
+             aes(yintercept = score), color = 'red') +
+  labs(x = "number of null models", title = 'sc1')
+
+ggplot(foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand != 500)) +
+  ggbeeswarm::geom_beeswarm(aes(x = factor(no_rand), y = score, color = no_rand, group= no_rand)) +
+  geom_hline(data = foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand == 500),
+             aes(yintercept = score), color = 'red') +
+  labs(x = "number of null models", title = 'sc2')
