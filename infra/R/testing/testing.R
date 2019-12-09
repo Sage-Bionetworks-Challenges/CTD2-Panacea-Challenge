@@ -262,8 +262,7 @@ bar2 <- score(prediction_path = "sim_rep.csv",
 
 bar <- tribble(~sc1, ~sc2, ~null, ~no_rand,  bar2[1], bar2[2], "final", 500)
 
-foo_plot_testing_null <- foo %>% bind_rows(bar) %>% gather(sc, score, -null, -no_rand) %>% mutate(pred = "ok")
-
+foo_plot_testing_null <- foo %>% bind_rows(bar) %>% gather(sc, score, -null, -no_rand) %>% mutate(pred = "dry_run")
 
 ggplot(foo_plot_testing_null %>% filter(sc == "sc1") %>% filter(no_rand != 500)) +
   ggbeeswarm::geom_beeswarm(aes(x = factor(no_rand), y = score, color = no_rand, group= no_rand)) +
@@ -276,3 +275,46 @@ ggplot(foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand != 500))
   geom_hline(data = foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand == 500),
              aes(yintercept = score), color = 'red') +
   labs(x = "number of null models", title = 'sc2')
+
+
+##with perfect prediction
+
+foo <- tribble(~sc1, ~sc2, ~null)
+
+for(j in c(1,5,10,15)){
+  for(i in 1:50){
+    bar <- score(prediction_path = "perfect_pred.csv",
+                 gold_path = "panacea_gold_standard.csv",
+                 null_model_path_sc1 = sc1_null_lead,
+                 null_model_path_sc2 = sc2_null_lead,
+                 round = "leaderboard",
+                 no_rand = j)
+    
+    bar <- tribble(~sc1, ~sc2, ~null, ~no_rand,  bar[1], bar[2], "leaderboard", j)
+    
+    foo <- foo %>% bind_rows(bar)
+  }
+}
+
+bar2 <- score(prediction_path = "perfect_pred.csv",
+              gold_path = "panacea_gold_standard.csv",
+              null_model_path_sc1 = sc1_null_final,
+              null_model_path_sc2 = sc2_null_final,
+              round = "final") 
+
+bar <- tribble(~sc1, ~sc2, ~null, ~no_rand,  bar2[1], bar2[2], "final", 500)
+
+foo_plot_testing_null <- foo %>% bind_rows(bar) %>% gather(sc, score, -null, -no_rand) %>% mutate(pred = "perfect")
+
+ggplot(foo_plot_testing_null %>% filter(sc == "sc1") %>% filter(no_rand != 500)) +
+  ggbeeswarm::geom_beeswarm(aes(x = factor(no_rand), y = score, color = no_rand, group= no_rand)) +
+  geom_hline(data = foo_plot_testing_null %>% filter(sc == "sc1") %>% filter(no_rand == 500),
+             aes(yintercept = score), color = 'red') +
+  labs(x = "number of null models", title = 'sc1')
+
+ggplot(foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand != 500)) +
+  ggbeeswarm::geom_beeswarm(aes(x = factor(no_rand), y = score, color = no_rand, group= no_rand)) +
+  geom_hline(data = foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand == 500),
+             aes(yintercept = score), color = 'red') +
+  labs(x = "number of null models", title = 'sc2')
+
