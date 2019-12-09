@@ -151,8 +151,8 @@ for(i in 1:10){
 
 bar2 <- score(prediction_path = "good_pred.csv",
               gold_path = "panacea_gold_standard.csv",
-              null_model_path_sc1 = sc1_final_lead,
-              null_model_path_sc2 = sc2_final_lead,
+              null_model_path_sc1 = sc1_null_final,
+              null_model_path_sc2 = sc1_null_final,
               round = "final") 
 
 bar <- tribble(~sc1, ~sc2, ~null,  bar2[1], bar2[2], "final")
