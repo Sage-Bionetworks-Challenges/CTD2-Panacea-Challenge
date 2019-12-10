@@ -1,7 +1,7 @@
 library(argparse)
 library(rjson)
 
-source("/usr/local/bin/validation_scoring.R")
+source("/usr/local/bin/validation_scoring_subset.R")
 
 parser = ArgumentParser()
 
