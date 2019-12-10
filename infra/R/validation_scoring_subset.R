@@ -74,7 +74,7 @@ score <- function(prediction_path,
                   null_model_path_sc1, 
                   null_model_path_sc2,
                   round = c("leaderboard", "final"),
-                  no_rand = 5){
+                  no_rand = 10){
   
   #most obnoxiously long vector of targets here
   
