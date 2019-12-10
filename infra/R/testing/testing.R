@@ -1,90 +1,90 @@
-source('validation_scoring.R')
+source('../validation_scoring_subset.R')
 
 #leaderboard
 
 template <- read_csv('template.csv')
 gold <- read_csv("panacea_gold_standard.csv")
 
-random_pred <- template %>% 
-  mutate_at(vars(-target), ~ runif(length(.))) %>% 
-  write_csv('random_pred.csv')
+# random_pred <- template %>% 
+#   mutate_at(vars(-target), ~ runif(length(.))) %>% 
+#   write_csv('random_pred.csv')
+# 
+# i <- 'cmpd_YM'
+# 
+# perfect_pred <- template
+# 
+# for(i in colnames(perfect_pred)[-1]){
+#   
+#   targets <- template$target
+#   foo_g <- filter(gold, cmpd_id == i)
+#   foo_p <- select(perfect_pred, target, i) %>% 
+#     rename("pred" = i)
+#   
+#   foo_p <- foo_p %>% 
+#     rowwise() %>% 
+#     mutate(pred = case_when(target %in% foo_g$target ~ runif(1, min = 0.9, max = 1),
+#                               !target %in% foo_g$target ~ runif(1, min = 0, max = 0.9))) %>% 
+#     set_names(c("target", eval(i)))
+#                   
+#   perfect_pred <- perfect_pred %>% 
+#     select(-i) %>% 
+#     left_join(foo_p)
+#   
+# }
+# 
+# write_csv(perfect_pred, 'perfect_pred.csv')
+# 
+# good_pred <- template
+# 
+# for(i in colnames(good_pred)[-1]){
+#   
+#   targets <- template$target
+#   foo_g <- filter(gold, cmpd_id == i)
+#   foo_p <- select(good_pred, target, i) %>% 
+#     rename("pred" = i)
+#   
+#   foo_p <- foo_p %>% 
+#     rowwise() %>% 
+#     mutate(pred = case_when(target %in% foo_g$target ~ runif(1, min = 0.85, max = 1),
+#                             !target %in% foo_g$target ~ runif(1, min = 0, max = 0.95))) %>% 
+#     set_names(c("target", eval(i)))
+#   
+#   good_pred <- good_pred %>% 
+#     select(-i) %>% 
+#     left_join(foo_p)
+#   
+# }
+# 
+# write_csv(good_pred, 'good_pred.csv')
+# 
+# ok_pred <- template
+# 
+# for(i in colnames(ok_pred)[-1]){
+#   
+#   targets <- template$target
+#   foo_g <- filter(gold, cmpd_id == i)
+#   foo_p <- select(ok_pred, target, i) %>% 
+#     rename("pred" = i)
+#   
+#   foo_p <- foo_p %>% 
+#     rowwise() %>% 
+#     mutate(pred = case_when(target %in% foo_g$target ~ runif(1, min = 0.7, max = 1),
+#                             !target %in% foo_g$target ~ runif(1, min = 0, max = 0.95))) %>% 
+#     set_names(c("target", eval(i)))
+#   
+#   ok_pred <- ok_pred %>% 
+#     select(-i) %>% 
+#     left_join(foo_p)
+#   
+# }
+# 
+# write_csv(ok_pred, 'ok_pred.csv')
 
-i <- 'cmpd_YM'
 
-perfect_pred <- template
-
-for(i in colnames(perfect_pred)[-1]){
-  
-  targets <- template$target
-  foo_g <- filter(gold, cmpd_id == i)
-  foo_p <- select(perfect_pred, target, i) %>% 
-    rename("pred" = i)
-  
-  foo_p <- foo_p %>% 
-    rowwise() %>% 
-    mutate(pred = case_when(target %in% foo_g$target ~ runif(1, min = 0.9, max = 1),
-                              !target %in% foo_g$target ~ runif(1, min = 0, max = 0.9))) %>% 
-    set_names(c("target", eval(i)))
-                  
-  perfect_pred <- perfect_pred %>% 
-    select(-i) %>% 
-    left_join(foo_p)
-  
-}
-
-write_csv(perfect_pred, 'perfect_pred.csv')
-
-good_pred <- template
-
-for(i in colnames(good_pred)[-1]){
-  
-  targets <- template$target
-  foo_g <- filter(gold, cmpd_id == i)
-  foo_p <- select(good_pred, target, i) %>% 
-    rename("pred" = i)
-  
-  foo_p <- foo_p %>% 
-    rowwise() %>% 
-    mutate(pred = case_when(target %in% foo_g$target ~ runif(1, min = 0.85, max = 1),
-                            !target %in% foo_g$target ~ runif(1, min = 0, max = 0.95))) %>% 
-    set_names(c("target", eval(i)))
-  
-  good_pred <- good_pred %>% 
-    select(-i) %>% 
-    left_join(foo_p)
-  
-}
-
-write_csv(good_pred, 'good_pred.csv')
-
-ok_pred <- template
-
-for(i in colnames(ok_pred)[-1]){
-  
-  targets <- template$target
-  foo_g <- filter(gold, cmpd_id == i)
-  foo_p <- select(ok_pred, target, i) %>% 
-    rename("pred" = i)
-  
-  foo_p <- foo_p %>% 
-    rowwise() %>% 
-    mutate(pred = case_when(target %in% foo_g$target ~ runif(1, min = 0.7, max = 1),
-                            !target %in% foo_g$target ~ runif(1, min = 0, max = 0.95))) %>% 
-    set_names(c("target", eval(i)))
-  
-  ok_pred <- ok_pred %>% 
-    select(-i) %>% 
-    left_join(foo_p)
-  
-}
-
-write_csv(ok_pred, 'ok_pred.csv')
-
-
-sc1_null_final <- synGet("syn21341654")$path
-sc2_null_final <- synGet("syn21341657")$path
-sc1_null_lead <- synGet('syn21341653')$path
-sc2_null_lead <- synGet('syn21341655')$path
+sc1_null_final <- synGet("syn21362374")$path
+sc2_null_final <- synGet("syn21362377")$path
+sc1_null_lead <- synGet('syn21362373')$path
+sc2_null_lead <- synGet('syn21362375')$path
 
 foo <- tribble(~sc1, ~sc2, ~null)
 
@@ -240,7 +240,7 @@ ggplot(foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand != 500))
 foo <- tribble(~sc1, ~sc2, ~null)
 
 for(j in c(1,5,10,15)){
-  for(i in 1:50){
+  for(i in 1:25){
     bar <- score(prediction_path = "sim_rep.csv",
                  gold_path = "panacea_gold_standard.csv",
                  null_model_path_sc1 = sc1_null_lead,
@@ -282,7 +282,7 @@ ggplot(foo_plot_testing_null %>% filter(sc == "sc2") %>% filter(no_rand != 500))
 foo <- tribble(~sc1, ~sc2, ~null)
 
 for(j in c(1,5,10,15)){
-  for(i in 1:50){
+  for(i in 1:25){
     bar <- score(prediction_path = "perfect_pred.csv",
                  gold_path = "panacea_gold_standard.csv",
                  null_model_path_sc1 = sc1_null_lead,
