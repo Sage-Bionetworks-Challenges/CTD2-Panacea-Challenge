@@ -14,16 +14,6 @@ parser$add_argument(
     required = TRUE
 )
 parser$add_argument(
-    "--nullmodel1",
-    type = "character",
-    required = TRUE
-)
-parser$add_argument(
-    "--nullmodel2",
-    type = "character",
-    required = TRUE
-)
-parser$add_argument(
     "--round",
     type = "character",
     required = TRUE
@@ -33,22 +23,19 @@ parser$add_argument(
     type = "character",
     required = TRUE
 )
-parser$add_argument(
-    "--metric",
-    type = "character",
-    required = TRUE
-)
 
 args <- parser$parse_args()
 
-if (args$metric == "metric1") {
-    source("/usr/local/bin/validation_scoring.R")
-} else {
-    source("/usr/local/bin/validation_scoring_subset.R")
+source("/usr/local/bin/validation_scoring_subset.R")
+nullmodel1 <- "/models/null_model_sc1_leaderboard_subset.rds"
+nullmodel2 <- "/models/null_model_sc2_leaderboard_subset.rds"
+if (args$round == "final") {
+    nullmodel1 <- "/models/null_model_sc1_subset.rds"
+    nullmodel2 <- "/models/null_model_sc2_subset.rds"
 }
 
 scores <- score(args$inputfile, args$goldstandard, 
-    args$nullmodel1, args$nullmodel2, args$round)
+    nullmodel1, nullmodel2, args$round)
 
 result_list <- list(
     "prediction_file_status" = "SCORED",
