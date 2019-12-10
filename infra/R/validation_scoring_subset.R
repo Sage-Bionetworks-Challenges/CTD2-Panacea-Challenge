@@ -32,15 +32,15 @@ validate <- function(prediction_path, template_path){
   }
   
   if(ncol(pred)>ncol_req){
-    errs["ncol_long"] <- paste0("Prediction file has extra  cols ", ncol(pred), " cols detected.")
+    errs["ncol_long"] <- paste0("Prediction file has extra cols: ", ncol(pred), " cols detected.")
   }
   
   if(nrow(pred)<nrow_req){
-    errs["nrow_short"] <- paste0("Prediction file is missing rows Only ", nrow(pred), " rows detected.")
+    errs["nrow_short"] <- paste0("Prediction file is missing rows. Only ", nrow(pred), " rows detected.")
   }
   
   if(nrow(pred)>nrow_req){
-    errs["nrow_long"] <- paste0("Prediction file has extra  rows ", nrow(pred), " rows detected.")
+    errs["nrow_long"] <- paste0("Prediction file has extra rows: ", nrow(pred), " rows detected.")
   }
   
   if(isTRUE(colnames(pred) %in% temp)){
@@ -73,7 +73,8 @@ score <- function(prediction_path,
                   gold_path,
                   null_model_path_sc1, 
                   null_model_path_sc2,
-                  round = c("leaderboard", "final")){
+                  round = c("leaderboard", "final"),
+                  no_rand = 5){
   
   #most obnoxiously long vector of targets here
   
@@ -98,7 +99,7 @@ score <- function(prediction_path,
     "EPHA5","EPHB2","EPHB4","EPHA4","BTK","TEC","MAP3K1","LIMK1","LIMK2","PTK6","EPHB6","ACVR1B","TGFBR1")
   
   if(round == "leaderboard"){
-    random_sample <- 5
+    random_sample <- no_rand
   }else if(round == "final"){
     random_sample <- expr(length(null_model)) ##to be evaluated later
   }
@@ -119,7 +120,6 @@ score <- function(prediction_path,
   
   pred_df <- pred %>% 
     gather(cmpd_id, confidence ,-target) %>% 
-    arrange(cmpd_id) %>% 
     group_by(cmpd_id) %>% 
     arrange(-confidence, target) %>% 
     slice(1:10) %>%  ##instead of top n. We eliminate ties alphabetically!
@@ -139,7 +139,7 @@ score <- function(prediction_path,
       select(cmpd_id, gold_pred, gold_null) %>% 
       unnest(c(gold_pred, gold_null)) %>% 
       ungroup() %>% 
-      summarize(pval = t.test(x = gold_pred, y= gold_null, paired = T)$p.value) %>% 
+      summarize(pval = suppressWarnings(wilcox.test(x = gold_pred, y= gold_null, paired = T, exact = NULL)$p.value)) %>% 
       purrr::pluck('pval')
   
 
@@ -183,7 +183,7 @@ score <- function(prediction_path,
       select(cmpd_id, gold_pred, gold_null) %>% 
       unnest(c(gold_pred, gold_null)) %>% 
       ungroup() %>% 
-      summarize(pval = t.test(x = gold_pred, y= gold_null, paired = T)$p.value) %>% 
+      summarize(pval = suppressWarnings(wilcox.test(x = gold_pred, y= gold_null, paired = T, exact = NULL)$p.value)) %>% 
       purrr::pluck('pval')
     
     if(is.nan(join)){
