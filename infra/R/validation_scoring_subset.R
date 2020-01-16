@@ -15,7 +15,7 @@ trim_vec <- function(vec, trim = 10){
 }
 
 validate <- function(prediction_path, template_path){
-  
+   
   pred <- readr::read_csv(prediction_path)
   temp <- readr::read_csv(template_path)
   
@@ -47,8 +47,17 @@ validate <- function(prediction_path, template_path){
     errs["colnames"] <- paste0("Column names are not correct. Column names must be ", cat(colnames_req))
   }
   
-  if(!(all(pred[-1] >= 0) & all(pred[-1] <= 1))){
-    errs["wrong_range"] <- paste0("Confidence values are not between 0 and 1.")
+
+  tryCatch({
+    if(!all(pred[-1] > 0) | !all(pred[-1] < 1)){
+      errs["wrong_range"] <- paste0("Confidence values are not between 0 and 1.")
+    }
+  }, error = function(e) {
+     return(NA)
+  })
+  
+  if(any(apply(pred[-1], 1:2, is.na))){
+    errs["is_na"] <- paste0("One or more predictions are missing.")
   }
   
   if(!all(apply(pred[-1], 1:2, is.numeric))){
