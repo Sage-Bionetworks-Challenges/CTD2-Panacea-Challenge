@@ -1,8 +1,6 @@
 library(argparse)
 library(rjson)
 
-source("/usr/local/bin/validation_scoring.R")
-
 parser = ArgumentParser()
 
 parser$add_argument(
@@ -12,16 +10,6 @@ parser$add_argument(
 )
 parser$add_argument(
     "--goldstandard",
-    type = "character",
-    required = TRUE
-)
-parser$add_argument(
-    "--nullmodel1",
-    type = "character",
-    required = TRUE
-)
-parser$add_argument(
-    "--nullmodel2",
     type = "character",
     required = TRUE
 )
@@ -38,8 +26,16 @@ parser$add_argument(
 
 args <- parser$parse_args()
 
+source("/usr/local/bin/validation_scoring_subset.R")
+nullmodel1 <- "/models/null_model_sc1_leaderboard_subset.rds"
+nullmodel2 <- "/models/null_model_sc2_leaderboard_subset.rds"
+if (args$round == "final") {
+    nullmodel1 <- "/models/null_model_sc1_subset.rds"
+    nullmodel2 <- "/models/null_model_sc2_subset.rds"
+}
+
 scores <- score(args$inputfile, args$goldstandard, 
-    args$nullmodel1, args$nullmodel2, args$round)
+    nullmodel1, nullmodel2, args$round)
 
 result_list <- list(
     "prediction_file_status" = "SCORED",

@@ -47,6 +47,7 @@ validate <- function(prediction_path, template_path){
     errs["colnames"] <- paste0("Column names are not correct. Column names must be ", cat(colnames_req))
   }
   
+
   tryCatch({
     if(!all(pred[-1] > 0) | !all(pred[-1] < 1)){
       errs["wrong_range"] <- paste0("Confidence values are not between 0 and 1.")
@@ -82,7 +83,7 @@ score <- function(prediction_path,
                   null_model_path_sc1, 
                   null_model_path_sc2,
                   round = c("leaderboard", "final"),
-                  no_rand = 5){
+                  no_rand = 10){
   
   #most obnoxiously long vector of targets here
   
