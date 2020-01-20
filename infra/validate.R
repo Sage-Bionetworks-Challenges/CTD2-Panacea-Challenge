@@ -1,14 +1,14 @@
 library(argparse)
 library(rjson)
 
-source("/usr/local/bin/validation_scoring_subset.R")
+#source("/usr/local/bin/validation_scoring_subset.R")
+source("infra/R/validation_scoring_subset.R")
 
 parser = ArgumentParser()
 
 parser$add_argument(
     "--inputfile",
-    type = "character",
-    required = TRUE
+    type = "character"
 )
 parser$add_argument(
     "--template",
@@ -29,13 +29,18 @@ result_list <- list(
     "round" = 1
 )
 
-errors <- validate(args$inputfile, args$template)
-
-if (length(errors) > 0) {
+if (is.null(args$inputfile)) {
     result_list$prediction_file_status = "INVALID"
+    result_list$prediction_file_errors = "Submission must be a Synapse File, not Folder/Project"
+} else {
+    errors <- validate(args$inputfile, args$template)
 
-    errors <- paste(unlist(errors, use.names=F), collapse="\n")
-    result_list$prediction_file_errors = errors
+    if (length(errors) > 0) {
+        result_list$prediction_file_status = "INVALID"
+
+        errors <- paste(unlist(errors, use.names=F), collapse="\n")
+        result_list$prediction_file_errors = errors
+    }
 }
 
 result_list %>%  
