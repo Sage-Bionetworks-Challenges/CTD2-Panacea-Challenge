@@ -43,8 +43,8 @@ validate <- function(prediction_path, template_path){
     errs["nrow_long"] <- paste0("Prediction file has extra rows: ", nrow(pred), " rows detected.")
   }
   
-  if(isTRUE(colnames(pred) %in% temp)){
-    errs["colnames"] <- paste0("Column names are not correct. Column names must be ", cat(colnames_req))
+  if(!identical(colnames(pred), colnames_req)){
+    errs["colnames"] <- paste0("Column names are not correct. Column names must be ", paste(c(colnames_req), collapse=", "))
   }
   
 
