@@ -113,14 +113,8 @@ score <- function(prediction_path,
     random_sample <- expr(length(null_model)) ##to be evaluated later
   }
   
-  # ground truth leaked in biorxiv preprint
-  leaked <- c("cmpd_CB","cmpd_DC","cmpd_DF","cmpd_EY","cmpd_FC","cmpd_FI","cmpd_IV","cmpd_LA",
-              "cmpd_PQ","cmpd_QJ","cmpd_RH","cmpd_WB","cmpd_VQ","cmpd_XY")
-  "%ni%" <- Negate("%in%")
-  
-  # remove the leaked compounds from datasets
-  gold <- suppressMessages(read_csv(gold_path)) %>% filter(target %in% targs) %>% filter(cmpd_id %ni% leaked)
-  pred <- suppressMessages(read_csv(prediction_path)) %>% filter(target %in% targs) %>% select(-leaked)
+  gold <- suppressMessages(read_csv(gold_path)) %>% filter(target %in% targs)
+  pred <- suppressMessages(read_csv(prediction_path)) %>% filter(target %in% targs)
   
   ###SC1 
   
@@ -142,7 +136,7 @@ score <- function(prediction_path,
     arrange(cmpd_id)
   
   sc1_vals <- sapply(null_model, function(x){
-    x <- x %>% filter(cmpd_id %ni% leaked)
+    
     join <- inner_join(gold_df, pred_df, by = 'cmpd_id', suffix = c("_gold", "_pred")) %>% 
       inner_join(x, by = 'cmpd_id') %>% 
       mutate(gold_pred = map2(data_gold, data_pred, function(x,y){
@@ -186,7 +180,7 @@ score <- function(prediction_path,
     arrange(cmpd_id) 
   
   sc2_vals <- sapply(null_model, function(x){
-    x <- x %>% filter(cmpd_id %ni% leaked)
+    
     join <- inner_join(gold_sc2, pred_sc2, by = 'cmpd_id', suffix = c("_gold", "_pred")) %>% 
       inner_join(x, by = 'cmpd_id') %>% 
       mutate(gold_pred = map2(data_gold, data_pred, function(x,y){
