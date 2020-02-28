@@ -1,0 +1,26 @@
+createdOn,objectId,prediction_file_errors,prediction_file_status,round,sc1_score,status,submitterId
+1580557860707,9698322,,SCORED,1,0.92955,ACCEPTED,3344419
+1580760386456,9698360,,SCORED,1,17.203,ACCEPTED,3393723
+1581404730966,9698697,,SCORED,1,3.3002,ACCEPTED,3383488
+1581423106267,9698742,,SCORED,1,7.4385,ACCEPTED,3401719
+1581437146226,9698788,,SCORED,1,11.652,ACCEPTED,3401316
+1581459237511,9698825,"One or more predictions are missing.
+Predictions are not all numeric values.",INVALID,1,,INVALID,2223762
+1581497417252,9698870,,SCORED,1,4.2093,ACCEPTED,3378020
+1581504714027,9698876,,,,,INVALID,2223762
+1581565478658,9699033,,SCORED,1,17.423,ACCEPTED,3404087
+1581578819630,9699058,,SCORED,1,13.803,ACCEPTED,3403678
+1581586002046,9699066,"Prediction file is missing cols. Only 1 cols detected.
+Prediction file is missing rows. Only 184 rows detected.
+Column names are not correct. Column names must be target, cmpd_YM, cmpd_QJ, cmpd_FA, cmpd_HV, cmpd_TN, cmpd_VQ, cmpd_FI, cmpd_AN, cmpd_WB, cmpd_ZZ, cmpd_QO, cmpd_CL, cmpd_OY, cmpd_QZ, cmpd_LA, cmpd_IV, cmpd_RH, cmpd_TV, cmpd_GZ, cmpd_OZ, cmpd_XY, cmpd_EY, cmpd_FC, cmpd_PQ, cmpd_CB, cmpd_SH, cmpd_OG, cmpd_DF, cmpd_KV, cmpd_DC, cmpd_OC, cmpd_WX",INVALID,1,,INVALID,3369765
+1581608184146,9699104,"Submission must be a Synapse File, not Folder/Project",INVALID,1,,INVALID,3334583
+1581608488913,9699105,,SCORED,1,15.107,ACCEPTED,3334583
+1581610040099,9699112,,SCORED,1,11.543,ACCEPTED,3369765
+1581613401040,9699120,,SCORED,1,6.2505,ACCEPTED,3401376
+1581614423208,9699127,,SCORED,1,6.2113,ACCEPTED,3404084
+1581634319052,9699151,,SCORED,1,13.788,ACCEPTED,3404089
+1581636008423,9699152,,SCORED,1,13.772,ACCEPTED,3400788
+1581640373576,9699164,,SCORED,1,15.379,ACCEPTED,3405464
+1581643880049,9699168,"Column names are not correct. Column names must be target, cmpd_YM, cmpd_QJ, cmpd_FA, cmpd_HV, cmpd_TN, cmpd_VQ, cmpd_FI, cmpd_AN, cmpd_WB, cmpd_ZZ, cmpd_QO, cmpd_CL, cmpd_OY, cmpd_QZ, cmpd_LA, cmpd_IV, cmpd_RH, cmpd_TV, cmpd_GZ, cmpd_OZ, cmpd_XY, cmpd_EY, cmpd_FC, cmpd_PQ, cmpd_CB, cmpd_SH, cmpd_OG, cmpd_DF, cmpd_KV, cmpd_DC, cmpd_OC, cmpd_WX",INVALID,1,,INVALID,2223762
+1581644571601,9699170,,SCORED,1,5.2119,ACCEPTED,2223762
+
