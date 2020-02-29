@@ -14,7 +14,6 @@ prediction_paths <- sapply(query$id, function(x){
 
 setNames(prediction_paths, query$teamId) 
 
-
 frac_overlap <- function(gold, pred){
   sum(gold %in% pred)/length(gold)
 }
@@ -46,24 +45,10 @@ paired_bootstrap_score <- function(prediction_paths,
              "PRKCA","PRKCB","PKN1","PKN2","ROCK2","ROCK1","NQO2","ACVR1","IRAK3","FLT3","RET","DDR1","DDR2","ABL2","BCR",
              "ABL1","RIPK2","MAPKAPK2","MAPK11","MAPK14","ZAK","RIPK3","YES1","LCK","SRC","FYN","HCK","LYN","FRK","EPHA2",
              "EPHA5","EPHB2","EPHB4","EPHA4","BTK","TEC","MAP3K1","LIMK1","LIMK2","PTK6","EPHB6","ACVR1B","TGFBR1")
-  
-  if(round == "leaderboard"){
-    random_sample <- no_rand
-  }else if(round == "final"){
-    random_sample <- expr(length(null_model)) ##to be evaluated later
-  }
-  
+
   gold <- suppressMessages(read_csv(gold_path)) %>% filter(target %in% targs)
   
-  predictions_sc1 <- lapply(prediction_paths, function(x){
-    read_csv(x) %>% 
-        gather(cmpd_id, confidence ,-target) %>% 
-        group_by(cmpd_id) %>% 
-        arrange(-confidence, target) 
-  }) %>% reduce()
- 
-  # %>% filter(target %in% targs)
-  
+
   template <- read_csv(template_path) %>% filter(target %in% targs)
   
   ###SC1 
@@ -77,6 +62,7 @@ paired_bootstrap_score <- function(prediction_paths,
   pred_df<- lapply(names(prediction_paths), function(x){
     read_csv(prediction_paths[[x]]) %>% 
       gather(cmpd_id, confidence ,-target) %>% 
+      filter(target %in% targs) %>% 
       group_by(cmpd_id) %>% 
       arrange(-confidence, target) %>% 
       slice(1:10) %>%  ##instead of top n. We eliminate ties alphabetically!
@@ -108,40 +94,47 @@ paired_bootstrap_score <- function(prediction_paths,
       mutate(cmpd_id= 1:32) %>% 
       rename(null = data)
   
+  
    join <- inner_join(gold_df, pred_df, by = 'cmpd_id') %>% 
-      ungroup() %>% 
-      sample_n(32, replace = T) %>% 
-      mutate(cmpd_id= 1:32) %>% 
-      inner_join(null_model) %>% 
-      select(-cmpd_id) %>% 
+    ungroup() %>% 
+     sample_n(32, replace = T) %>% 
+     mutate(cmpd_id= 1:32) %>% 
+     inner_join(null_model) %>% 
+     select(-cmpd_id) 
+   
+   the_names <- colnames(join)
+   
+   join <- join %>% 
      map(., function(a){
        map2(.$data, a, function(x,y){
-         print(y)
        frac_overlap(x$target, y$target)
-       })
-     })
+       }) %>% plyr::ldply()
+     }) %>% bind_cols
    
-   
-   
-   %>% 
-      mutate(gold_null = map2(data, null,function(x,y){
-        frac_overlap(x$target, y$target_random)
-      })) %>% 
-      select(cmpd_id, gold_pred, gold_null) %>% 
-      unnest(c(gold_pred, gold_null)) %>% 
-      ungroup() %>% 
-      summarize(pval = suppressWarnings(wilcox.test(x = gold_pred, y= gold_null, paired = T, exact = NULL)$p.value)) %>% 
-      purrr::pluck('pval')
+   colnames(join) <- the_names
+
+   ps <- join %>% 
+     apply(., 2, function(x){
+       wilcox.test(x = .$null, y= x, paired = T, exact = NULL)$p.value
+       }) 
     
     
-    if(is.nan(join)){
-      join <- 1
+    if(any(is.nan(ps))){
+      ps[is.nan(ps)] <- 1
     }
-    join
+    ps
     
-  })
+  }) %>% t()
   
-  sc1 <- mean(-log2(sc1_vals)) %>% signif(5)
+  # sc1 <- mean(-log2(sc1_vals)) %>% signif(5)
+  
+  sc1 <- sc1_vals %>% 
+    as_data_frame() %>% 
+    gather(submission, bs_score)
+  
+  ggplot(sc1) +
+    geom_boxplot(aes(x = submission, y = -log2(bs_score))) +
+    
   
   ##SC2
   
