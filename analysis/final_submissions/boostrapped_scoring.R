@@ -205,7 +205,8 @@ paired_bootstrap_score <- function(prediction_paths,
     geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score))) +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
     
-  
+  challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc2_vals, refPredIndex = 10, invertBayes = F)
+  challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals, refPredIndex = 5, invertBayes = F)
   
   score <- c("sc1" = sc1, 
              "sc2" = sc2)
