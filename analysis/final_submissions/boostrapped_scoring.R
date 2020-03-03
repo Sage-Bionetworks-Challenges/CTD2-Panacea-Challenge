@@ -84,11 +84,11 @@ paired_bootstrap_score <- function(prediction_paths,
     null_model <- template %>% 
       gather(cmpd_id, confidence ,-target) %>% 
       group_by(cmpd_id) %>% 
-      sample_n(10, replace = F) %>% 
       arrange(-confidence, target) %>% 
+      sample_n(10, replace = F) %>% 
       select(-confidence) %>%
-      set_names(c('target_random', 'cmpd_id')) %>% 
-      filter(target_random %in% targs) %>%
+      set_names(c('target', 'cmpd_id')) %>% 
+      filter(target %in% targs) %>%
       nest() %>% 
       ungroup() %>% 
       mutate(cmpd_id= 1:32) %>% 
@@ -107,7 +107,7 @@ paired_bootstrap_score <- function(prediction_paths,
    join <- join %>% 
      map(., function(a){
        map2(.$data, a, function(x,y){
-       frac_overlap(x$target, y$target)
+       frac_overlap(x$target, y$target) 
        }) %>% plyr::ldply()
      }) %>% bind_cols
    
@@ -115,7 +115,7 @@ paired_bootstrap_score <- function(prediction_paths,
 
    ps <- join %>% 
      apply(., 2, function(x){
-       wilcox.test(x = .$null, y= x, paired = T, exact = NULL)$p.value
+       wilcox.test(x = x, y= .$null, paired = T, exact = NULL)$p.value
        }) 
     
     
@@ -133,52 +133,77 @@ paired_bootstrap_score <- function(prediction_paths,
     gather(submission, bs_score)
   
   ggplot(sc1) +
-    geom_boxplot(aes(x = submission, y = -log2(bs_score))) +
+    geom_boxplot(aes(x = submission, y = -log2(bs_score))) 
     
   
   ##SC2
+
+   
+   pred_df<- lapply(names(prediction_paths), function(x){
+     read_csv(prediction_paths[[x]]) %>% 
+       gather(cmpd_id, confidence ,-target) %>% 
+       filter(target %in% targs) %>% 
+       group_by(cmpd_id) %>% 
+       arrange(-confidence, target) %>%  ##instead of top n. We eliminate ties alphabetically!
+       nest() %>% 
+       arrange(cmpd_id) %>% 
+       rename({{x}} := data)
+   }) %>% reduce(left_join, by = 'cmpd_id')
   
-  null_model <- read_rds(null_model_path_sc2) 
-  null_model <- sample(null_model, eval(random_sample))  
-  
-  pred_sc2 <- pred %>% 
-    gather(cmpd_id, confidence ,-target) %>% 
-    group_by(cmpd_id) %>% 
-    arrange(-confidence, target) %>% 
-    nest() %>% 
-    arrange(cmpd_id)
-  
-  gold_sc2 <- gold %>% 
-    select(-cmpd) %>% 
-    group_by(cmpd_id) %>% 
-    nest() %>% 
-    arrange(cmpd_id) 
-  
-  sc2_vals <- sapply(null_model, function(x){
+  sc2_vals <- sapply(1:1000, function(x){
     
-    join <- inner_join(gold_sc2, pred_sc2, by = 'cmpd_id', suffix = c("_gold", "_pred")) %>% 
-      inner_join(x, by = 'cmpd_id') %>% 
-      mutate(gold_pred = map2(data_gold, data_pred, function(x,y){
-        match(x$target, y$target) %>% unique()
-      })) %>% 
-      mutate(gold_null = map2(data_gold, data, function(x,y){
-        match(x$target, y$target_random) %>% unique()
-      })) %>% 
-      select(cmpd_id, gold_pred, gold_null) %>% 
-      unnest(c(gold_pred, gold_null)) %>% 
+    null_model <- template %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      group_by(cmpd_id) %>% 
+      arrange(-confidence, target) %>% 
+      sample_frac(1, replace = F) %>% 
+      select(-confidence) %>%
+      set_names(c('target', 'cmpd_id')) %>% 
+      filter(target %in% targs) %>%
+      nest() %>% 
       ungroup() %>% 
-      summarize(pval = suppressWarnings(wilcox.test(x = gold_pred, y= gold_null, paired = T, exact = NULL)$p.value)) %>% 
-      purrr::pluck('pval')
+      mutate(cmpd_id= 1:32) %>% 
+      rename(null = data)
     
-    if(is.nan(join)){
-      join <- 1
+    join <- inner_join(gold_df, pred_df, by = 'cmpd_id') %>% 
+      ungroup() %>% 
+      sample_n(32, replace = T) %>% 
+      mutate(cmpd_id= 1:32) %>% 
+      inner_join(null_model) %>% 
+      select(-cmpd_id) 
+    
+    the_names <- colnames(join)
+    
+    join <- join %>% 
+      map(., function(a){
+        map2(.$data, a, function(x,y){
+          match(x$target, y$target) %>% unique() 
+        }) %>% unlist()
+      }) %>% bind_rows
+    
+    
+    colnames(join) <- the_names
+    
+    ps <- join %>% 
+      apply(., 2, function(x){
+        wilcox.test(x = x, y= .$null, paired = T, exact = NULL)$p.value
+      }) 
+    
+    
+    if(any(is.nan(ps))){
+      ps[is.nan(ps)] <- 1
     }
-    join
+    ps
     
-  })
+  }) %>% t()
   
-  sc2 <- mean(-log2(sc2_vals)) %>% signif(5)
+   sc2 <- sc2_vals %>% 
+    as_data_frame() %>% 
+    gather(submission, bs_score)
   
+  ggplot(sc2) +
+    geom_boxplot(aes(x = submission, y = -log2(bs_score))) 
+    
   score <- c("sc1" = sc1, 
              "sc2" = sc2)
   
