@@ -133,8 +133,8 @@ paired_bootstrap_score <- function(prediction_paths,
     gather(submission, bs_score)
   
   ggplot(sc1) +
-    geom_boxplot(aes(x = submission, y = -log2(bs_score))) 
-    
+    geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score))) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
   
   ##SC2
 
@@ -202,8 +202,11 @@ paired_bootstrap_score <- function(prediction_paths,
     gather(submission, bs_score)
   
   ggplot(sc2) +
-    geom_boxplot(aes(x = submission, y = -log2(bs_score))) 
+    geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score))) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
     
+  
+  
   score <- c("sc1" = sc1, 
              "sc2" = sc2)
   
