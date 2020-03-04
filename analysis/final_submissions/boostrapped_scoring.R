@@ -187,17 +187,45 @@ targs <- c("EGFR","CSNK2A2","BMP2K","AAK1","Q6ZSR9","GAK","PRKD2","PRKD3","SIK2"
    sc2 <- sc2_vals %>% 
     as_data_frame() %>% 
     gather(submission, bs_score)
+
+  sc1_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals, refPredIndex = 5, invertBayes = F) %>% 
+    as_tibble(rownames = "submission") %>% 
+    rename(bayes = value)
   
-  sc1_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc2_vals, refPredIndex = 10, invertBayes = F)
-  sc2_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals, refPredIndex = 5, invertBayes = F)
-  
-  sc1_p <- ggplot(sc1 %>% filter(submission != 'data')) +
-    geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score))) +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-  
-  sc2_p <- ggplot(sc2 %>% filter(submission != 'data')) +
-    geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score))) +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-  
+  sc2_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc2_vals, refPredIndex = 10, invertBayes = F) %>% 
+  as_tibble(rownames = "submission") %>% 
+    rename(bayes = value)
+
+
+sc1_final <- sc1 %>% 
+  filter(!submission %in% c('data','null')) %>% 
+  left_join(sc1_bf) %>% 
+  mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
+                                    bayes <3 ~ '<3',
+                                    bayes>3 & bayes<5 ~ '3-5',
+                                    bayes>5 ~ ">5"))
+            
+ggplot(sc1_final) +
+    geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score), color = bayes_category)) +
+    theme_bw() + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  scale_color_manual(values = c("Reference"="red","3-5" = "orange", ">5"= "darkgrey"),
+                     name = "Bayes Factor") 
+
+sc2_final <- sc2 %>% 
+  filter(!submission %in% c('data','null')) %>% 
+  left_join(sc2_bf) %>% 
+  mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
+                                    bayes <3 ~ '<3',
+                                    bayes>3 & bayes<5 ~ '3-5',
+                                    bayes>5 ~ ">5"))
+
+ggplot(sc2_final) +
+    geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score), color = bayes_category)) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  scale_color_manual(values = c("Reference"="red","3-5" = "orange", ">5"= "darkgrey"),
+                     name = "Bayes Factor") 
+
   
 
