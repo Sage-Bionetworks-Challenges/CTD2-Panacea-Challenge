@@ -3,10 +3,12 @@ suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(readr))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(purrr))
+library(ggplot2)
 library(synapser)
+library(forcats)
 synLogin()
 
-query <- synTableQuery('select * from syn21628283')$asDataFrame()
+query <- synTableQuery('select * from syn21628283 where submissionId < 9699164')$asDataFrame()
 
 prediction_paths <- sapply(query$id, function(x){
   synGet(x)$path
@@ -18,15 +20,11 @@ frac_overlap <- function(gold, pred){
   sum(gold %in% pred)/length(gold)
 }
 
-paired_bootstrap_score <- function(prediction_paths,
-                  gold_path,
-                  template_path,
-                  null_model_path_sc1, 
-                  null_model_path_sc2){
+gold_path <- synGet("syn21302164")$path
+template_path <- synGet('syn21321426')$path
+#most obnoxiously long vector of targets here
   
-  #most obnoxiously long vector of targets here
-  
-  targs <- c("EGFR","CSNK2A2","BMP2K","AAK1","Q6ZSR9","GAK","PRKD2","PRKD3","SIK2","SIK3","PLK4","AURKA","AURKB","PTK2",
+targs <- c("EGFR","CSNK2A2","BMP2K","AAK1","Q6ZSR9","GAK","PRKD2","PRKD3","SIK2","SIK3","PLK4","AURKA","AURKB","PTK2",
              "FER","PTK2B","TNK1","TNK2","MAP2K5","MAP2K1","MAP2K2","PDGFRB","STK10","SLK","MAP4K2","MAP4K5","MAP4K3",
              "MET","CDK2","CDK5","CDK16","CDK9","GSK3A","GSK3B","CDK7","ERCC2","CDK1","CDK12","CDK13","CLK1","DYRK1A",
              "CDK17","CDK4","CDK6","FGFR1","MAPK10","MAPK8","MAPK9","ADCK1","STK16","NEK9","FECH","CSNK1A1","CSNK1E",
@@ -71,14 +69,7 @@ paired_bootstrap_score <- function(prediction_paths,
       rename({{x}} := data)
   }) %>% reduce(left_join, by = 'cmpd_id')
   
-  # pred_df <- pred %>% 
-  #   gather(cmpd_id, confidence ,-target) %>% 
-  #   group_by(cmpd_id) %>% 
-  #   arrange(-confidence, target) %>% 
-  #   slice(1:10) %>%  ##instead of top n. We eliminate ties alphabetically!
-  #   nest() %>% 
-  #   arrange(cmpd_id)
-  
+
   sc1_vals <- sapply(1:1000, function(x){
     
     null_model <- template %>% 
@@ -131,10 +122,6 @@ paired_bootstrap_score <- function(prediction_paths,
   sc1 <- sc1_vals %>% 
     as_data_frame() %>% 
     gather(submission, bs_score)
-  
-  ggplot(sc1) +
-    geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score))) +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
   
   ##SC2
 
@@ -201,15 +188,16 @@ paired_bootstrap_score <- function(prediction_paths,
     as_data_frame() %>% 
     gather(submission, bs_score)
   
-  ggplot(sc2) +
+  sc1_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc2_vals, refPredIndex = 10, invertBayes = F)
+  sc2_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals, refPredIndex = 5, invertBayes = F)
+  
+  sc1_p <- ggplot(sc1 %>% filter(submission != 'data')) +
     geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score))) +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-    
-  challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc2_vals, refPredIndex = 10, invertBayes = F)
-  challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals, refPredIndex = 5, invertBayes = F)
   
-  score <- c("sc1" = sc1, 
-             "sc2" = sc2)
+  sc2_p <- ggplot(sc2 %>% filter(submission != 'data')) +
+    geom_boxplot(aes(x = fct_reorder(submission, bs_score), y = -log2(bs_score))) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
   
-  return(score)
-}
+  
+
