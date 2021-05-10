@@ -1,0 +1,589 @@
+---
+title: "Ensemble model analysis"
+author: "Robert Allaway, Sage Bionetworks"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    code_fold: hide
+    toc: true
+    toc_float: true
+---
+
+## Introduction
+
+Often times, an ensemble of methods will perform better than the individual method. This known as the "wisdom of the crowds" phenomenon. An easy way to generate an ensemble prediction is to take the mean, median, or weighted average of all of the predictions. You then can score this "prediction" as you would any other prediction file to assess it's performance relative to the submissions. 
+
+Another consideration is that the wisdom of the crowds method sometimes applies only to a certain point. That is, if you order all of the submitted predictions from high to low performance, there may be a point after which you no longer want to add a prediction to your ensemble method. A good visualization of this can be found in Supplemental Figure 8 [here](https://www.biorxiv.org/content/10.1101/2019.12.31.891812v3.supplementary-material), where you can see how the ensemble score changes after adding additional predictions. Performance peaks with an ensemble of the top four predictions, but does not improve with additions of further models. 
+
+## Setup 
+
+First, import packages, scoring functions, and challenge data. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(magrittr)
+library(readr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
+library(synapser)
+library(forcats)
+synLogin()
+
+set.seed(27651030)
+
+query <- synTableQuery("SELECT * FROM syn22316156 where status = \'ACCEPTED\'")$filepath %>% 
+  read_csv() %>% 
+  filter(ROW_ID != 9696740, !is.na(writeUp))
+
+query <- query %>% 
+  arrange(desc(sc1_score)) %>% 
+  mutate(rank = 1:nrow(.)) 
+
+prediction_paths <- sapply(query$prediction_fileid, function(x){
+  synGet(x)$path
+})
+
+
+get_user_or_team_names <- function(id){
+ name <- try(synGetTeam(as.integer(id))$name, silent = T) ##try to get the team name from id 
+ if(class(name)=='try-error'){ ##if it is not a team, will return error, so then try to get user profile
+ try({
+   prof <- synGetUserProfile(id = id) ##get first and last name
+   fn <- prof$firstName
+   ln <- prof$lastName
+   if(is.null(fn) | is.null(ln)){
+     un <- prof$userName
+     return(un) 
+   }else if(fn == "" | ln == ""){ ##if empty, get username instead
+     un <- prof$userName
+     return(un)
+   }else{
+     return(paste(fn, ln))
+   }
+   })
+   }else{
+     return(name)
+   }
+}
+
+query <- mutate(query, participant_name = sapply(submitterid, get_user_or_team_names)) %>% 
+      mutate(participant_name = case_when(participant_name == "Hyunmin Kim" ~ "Theragen", 
+                                participant_name != "Hyunmin Kim" ~ participant_name)) 
+
+prediction_paths <- setNames(prediction_paths, query$participant_name)
+
+frac_overlap <- function(gold, pred){
+  sum(gold %in% pred)/length(gold)
+}
+
+gold_path <- synGet("syn21302164")$path
+template_path <- synGet('syn21321426')$path
+
+
+```
+
+Define the targets that we have reliable information on and will score based on.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+targs <- c("EGFR","CSNK2A2","BMP2K","AAK1","Q6ZSR9","GAK","PRKD2","PRKD3","SIK2","SIK3","PLK4","AURKA","AURKB","PTK2",
+             "FER","PTK2B","TNK1","TNK2","MAP2K5","MAP2K1","MAP2K2","PDGFRB","STK10","SLK","MAP4K2","MAP4K5","MAP4K3",
+             "MET","CDK2","CDK5","CDK16","CDK9","GSK3A","GSK3B","CDK7","ERCC2","CDK1","CDK12","CDK13","CLK1","DYRK1A",
+             "CDK17","CDK4","CDK6","FGFR1","MAPK10","MAPK8","MAPK9","ADCK1","STK16","NEK9","FECH","CSNK1A1","CSNK1E",
+             "CSNK1D","MAP3K4","WEE1","MST1R","PIP4K2C","IRAK1","TAOK3","PIM1","TAOK1","CIT","PRKX","PRKY","CDC42BPA",
+             "CDC42BPB","PRKACA","PRKACB","PRKCQ","CLK4","PAK6","PRKACG","RPS6KB1","MAPK7","PRKG1","PRKCI","CDKL5","CDK18",
+             "ADRBK1","STK11","EPHB3","BRAF","NLK","TGFBR2","CSK","MYLK","FGR","TESK1","KIT","ULK1","FES","IGF1R","INSR",
+             "JAK2","STK26","CAMK4","TAOK2","EIF2AK1","ICK","CSNK1G2","CSNK1G1","CSNK1G3","CLK2","TP53RK","MINK1","MAPK15",
+             "ERN1","MAP2K6","MAP3K5","MAP3K6","MAP2K3","ERN2","MAPK1","MAPK3","AKT3","AKT1","AKT2","RPS6KA5","ACVRL1",
+             "MAPKAPK5","NEK1","ARAF","ACAD10","ADCK3","ACVR2B","PAK2","CLK3","MAPKAPK3","PLK1","PDXK","DCK","ADK","PKMYT1",
+             "NUAK2","HSP90AB2P","STK24","CMPK1","GARS","ACOX3","ACAD11","DCTPP1","NEK7","SMC2","TOP2B","MYH10","PIM2",
+             "CAMK1G","PIP4K2A","PIP4K2B","AK2","NME2","CDC42BPG","AP1G1","DHCR24","SLC25A5","ACTR3","SNRNP200",
+             "CARS","DNAJA1","PFKP","MAT2A","IPO7","STK38L","AIMP1","CDC7","PRKAR2A","EPHA1","EPHA7","BMPR1B","BMPR1A",
+             "TYK2","BMPR2","MAP3K2","MAP3K3","SYK","NEK3","BUB1","LATS1","MAP3K11","IKBKE","TBK1","STK4","STK3","CDK3",
+             "MARK4","MELK","IRAK4","RPS6KA4","RPS6KA1","RPS6KA3","MARK2","MARK3","RPS6KA6","PRKAG2","PRKAA1","PRKAG1","PAK4",
+             "CHEK1","NTRK1","CAMK2D","CAMK2G","CAMKK2","PHKG2","MAP4K4","TNIK","MYLK3","MAP4K1","JAK1","ULK3","PRKCD",
+             "PRKCA","PRKCB","PKN1","PKN2","ROCK2","ROCK1","NQO2","ACVR1","IRAK3","FLT3","RET","DDR1","DDR2","ABL2","BCR",
+             "ABL1","RIPK2","MAPKAPK2","MAPK11","MAPK14","ZAK","RIPK3","YES1","LCK","SRC","FYN","HCK","LYN","FRK","EPHA2",
+             "EPHA5","EPHB2","EPHB4","EPHA4","BTK","TEC","MAP3K1","LIMK1","LIMK2","PTK6","EPHB6","ACVR1B","TGFBR1")
+
+
+```
+
+## SC1 
+
+Read in prediction files, slice out top 10 predictions for each compound, and nest dataframes.
+
+The ensemble method is a simple median ensemble. We take the top SC1 prediction file, and treat that as the reference (first "ensemble"). We then add the second, calculate the medians of the predictions, and treat that as the second ensemble. We then calculate the medians of the top 3, top 4, and so on, to create multiple ensemble predictions. Then, we bootstrap the median prediction files 1000 times, score them, and calculate Bayes factors to determine if any of aggregated predictions are better than the top single prediction file. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+  gold <- suppressMessages(read_csv(gold_path)) %>% filter(target %in% targs)
+  
+  template <- read_csv(template_path) %>% filter(target %in% targs)
+  
+  ###SC1 
+  
+  gold_df <- gold %>% 
+    select(-cmpd) %>% 
+    group_by(cmpd_id) %>% 
+    nest() %>% 
+    arrange(cmpd_id)
+  
+ pred_df<- lapply(names(prediction_paths), function(x){
+    read_csv(prediction_paths[[x]]) %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      mutate(participant_name = x) 
+  }) %>% bind_rows() %>% 
+   left_join(query %>% select(participant_name, rank))
+ 
+ median_preds_sc1 <- lapply(unique(pred_df$rank), function(i){
+   colname <- paste0('median_ensemble_',i)
+   foo <- pred_df %>%
+     filter(rank <= i) %>% 
+     group_by(target, cmpd_id) %>% 
+     summarize(!!colname := median(confidence)) %>% 
+     ungroup()
+   foo
+ }) 
+    
+pred_df_combined<- lapply(median_preds_sc1, function(x){
+    iter <- colnames(x)[3]
+    x %>% 
+      rename(confidence = iter) %>% 
+      filter(target %in% targs) %>% 
+      group_by(cmpd_id) %>%
+      arrange(-confidence, target) %>% 
+      slice(1:10) %>%  ##instead of top n. We eliminate ties alphabetically!
+      nest() %>% 
+      arrange(cmpd_id) %>% 
+       rename({{iter}} := data)
+  }) %>% reduce(left_join, by = 'cmpd_id')
+
+
+sc1_vals <- sapply(1:1000, function(x){
+    
+    null_model <- template %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      group_by(cmpd_id) %>% 
+      arrange(-confidence, target) %>% 
+      sample_n(10, replace = F) %>% 
+      select(-confidence) %>%
+      set_names(c('target', 'cmpd_id')) %>% 
+      filter(target %in% targs) %>%
+      nest() %>% 
+      ungroup() %>% 
+      mutate(cmpd_id= 1:32) %>% 
+      rename(null = data)
+  
+   join <- inner_join(gold_df, pred_df_combined, by = 'cmpd_id') %>% 
+    ungroup() %>% 
+     sample_n(32, replace = T) %>% 
+     mutate(cmpd_id= 1:32) %>% 
+     inner_join(null_model, by = 'cmpd_id') %>% 
+     select(-cmpd_id) 
+   
+   the_names <- colnames(join)
+   
+   join <- join %>% 
+     map(., function(a){
+       map2(.$data, a, function(x,y){
+       frac_overlap(x$target, y$target) 
+       }) %>% plyr::ldply()
+     }) %>% bind_cols
+   
+   colnames(join) <- the_names
+
+   ps <- join %>% 
+     apply(., 2, function(x){
+       wilcox.test(x = x, y= .$null, paired = T, exact = NULL)$p.value
+       }) 
+    
+    
+    if(any(is.nan(ps))){
+      ps[is.nan(ps)] <- 1
+    }
+    ps
+    
+  }) %>% t
+
+sc1 <- sc1_vals %>% 
+  as_data_frame() %>% 
+  gather(model, bs_score) %>% 
+  filter(model != "data", model != "null") %>% 
+  mutate(number = stringr::str_extract(model, '[0-9]+') %>% as.numeric())
+
+ sc1_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals, refPredIndex = 2, invertBayes = F) %>% 
+    as_tibble(rownames = "model") %>% 
+    rename(bayes = value) 
+ 
+```
+
+Then plot SC1 results. Red indicates the reference model, light blue indicates a Bayes factor of <3 (statistically indistinguishable), while darker colors indicates a larger Bayes factor. The second model (a combination of the top two) is statistically indistinguishable from the reference. Subsequent models are substantially less performant, with the exception of the combination of the top 6 models, which is again statistically indistinguishable from the reference.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+sc1_bf %>% filter(!model %in% c('data','null')) %>% arrange(bayes)
+
+sc1_final <- sc1 %>% 
+  filter(!model %in% c('data','null')) %>% 
+  left_join(sc1_bf) %>% 
+  mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
+                                    bayes<=3 ~ '<3',
+                                    bayes>=3 & bayes <5 ~ "3-5",
+                                    bayes>=5 & bayes <10 ~ "5-10",
+                                    bayes>=10 ~ ">10")) %>% 
+  mutate(bayes_category = forcats::fct_inorder(bayes_category))
+            
+ensemble_inclusions <- pred_df %>% 
+  select(participant_name, rank) %>% 
+  distinct
+
+ensemble_inclusions
+
+ggplot(sc1_final, aes(x = number, y = -log2(bs_score), color = bayes_category, group = number)) +
+    geom_boxplot(outlier.shape = NA) +
+    theme_bw() + 
+  scale_color_manual(values = c("Reference"="#FB3640", '<3' = '#0585ED', "3-5" = "#124773",
+                                "5-10" = '#183247', ">10" = "#000000"),
+                      name = "Bayes Factor") +
+  labs(y = 'Bootstrapped SC1 score', x = 'Number of Models') +
+  annotate("text", x = 0.8, y = 1.0, label = "Atom", angle = 90,hjust = 0, size = 3) +
+  annotate("text", x = 1.8, y = 1.0, label = "+Theragen", angle = 90,hjust = 0, size = 3) +
+  annotate("text", x = 2.8, y = 1.0, label = "+DMIS_PDA", angle = 90,hjust = 0, size = 3) +
+  annotate("text", x = 3.8, y = 1.0, label = "+DREAM_2019_xielab", angle = 90,hjust = 0, size = 3) +
+  annotate("text", x = 4.8, y = 1.0, label = "+netphar",angle = 90,hjust = 0, size = 3) +
+  annotate("text", x = 5.8, y = 1.0, label = "+SBNB",angle = 90,hjust = 0, size = 3)+
+  annotate("text", x = 6.8, y = 1.0, label = "+Senthamizhan V",angle = 90,hjust = 0, size = 3)+
+  annotate("text", x = 7.8, y = 1.0, label = "+Signal",angle = 90,hjust = 0, size = 3)+
+  annotate("text", x = 8.8, y = 1.0, label = "+TeamAxolotl",angle = 90,hjust = 0, size = 3)+
+  annotate("text", x = 9.8, y = 1.0, label = "+AMberRland",angle = 90,hjust = 0, size = 3)+
+  scale_x_continuous(breaks= scales::pretty_breaks(10))
+
+```
+
+## SC2 
+
+Repeat, but for SC2, which is the significance of the target ranks as compared to a null model.
+
+The ensemble method is a simple median ensemble. We take the top SC2 prediction file, and treat that as the reference (first "ensemble"). We then add the second, calculate the medians of the predictions, and treat that as the second ensemble. We then calculate the medians of the top 3, top 4, and so on, to create multiple ensemble predictions. Then, we bootstrap the median prediction files 1000 times, score them, and calculate Bayes factors to determine if any of aggregated predictions are better than the top single prediction file. 
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+query <- synTableQuery("SELECT * FROM syn22316156 where status = \'ACCEPTED\'")$filepath %>% 
+  read_csv() %>% 
+  filter(ROW_ID != 9696740, !is.na(writeUp))
+
+query <- query %>% 
+  arrange(desc(sc2_score)) %>% 
+  mutate(rank = 1:nrow(.)) 
+
+prediction_paths <- sapply(query$prediction_fileid, function(x){
+  synGet(x)$path
+})
+
+
+query <- mutate(query, participant_name = sapply(submitterid, get_user_or_team_names)) %>% 
+      mutate(participant_name = case_when(participant_name == "Hyunmin Kim" ~ "Theragen", 
+                                participant_name != "Hyunmin Kim" ~ participant_name)) 
+
+prediction_paths <- setNames(prediction_paths, query$participant_name)
+
+
+gold_df <- gold %>% 
+    select(-cmpd) %>% 
+    group_by(cmpd_id) %>% 
+    nest() %>% 
+    arrange(cmpd_id)
+  
+ pred_df<- lapply(names(prediction_paths), function(x){
+    read_csv(prediction_paths[[x]]) %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      mutate(participant_name = x) 
+  }) %>% bind_rows() %>% 
+   left_join(query %>% select(participant_name, rank))
+ 
+ median_preds_sc2 <- lapply(unique(pred_df$rank), function(i){
+   colname <- paste0('median_ensemble_',i)
+   foo <- pred_df %>%
+     filter(rank <= i) %>% 
+     group_by(target, cmpd_id) %>% 
+     summarize(!!colname := median(confidence)) %>% 
+     ungroup()
+   foo
+ }) 
+    
+pred_df_combined<- lapply(median_preds_sc2, function(x){
+    iter <- colnames(x)[3]
+    x %>% 
+      rename(confidence = iter) %>% 
+      filter(target %in% targs) %>% 
+      group_by(cmpd_id) %>%
+      arrange(-confidence, target) %>% 
+      nest() %>% 
+      arrange(cmpd_id) %>% 
+       rename({{iter}} := data)
+  }) %>% reduce(left_join, by = 'cmpd_id')
+
+
+sc2_vals <- sapply(1:1000, function(x){
+    
+    null_model <- template %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      group_by(cmpd_id) %>% 
+      arrange(-confidence, target) %>% 
+      sample_frac(1, replace = F) %>% 
+      select(-confidence) %>%
+      set_names(c('target', 'cmpd_id')) %>% 
+      filter(target %in% targs) %>%
+      nest() %>% 
+      ungroup() %>% 
+      mutate(cmpd_id= 1:32) %>% 
+      rename(null = data)
+    
+    join <- inner_join(gold_df, pred_df_combined, by = 'cmpd_id') %>% 
+      ungroup() %>% 
+      sample_n(32, replace = T) %>% 
+      mutate(cmpd_id= 1:32) %>% 
+      inner_join(null_model, by = 'cmpd_id') %>% 
+      select(-cmpd_id) 
+    
+    the_names <- colnames(join)
+    
+    join <- join %>% 
+      map(., function(a){
+        map2(.$data, a, function(x,y){
+          match(x$target, y$target) %>% unique() 
+        }) %>% unlist()
+      }) %>% bind_rows
+    
+    
+    colnames(join) <- the_names
+    
+    ps <- join %>% 
+      apply(., 2, function(x){
+        wilcox.test(x = x, y= .$null, paired = T, exact = NULL)$p.value
+      }) 
+    
+    
+    if(any(is.nan(ps))){
+      ps[is.nan(ps)] <- 1
+    }
+    ps
+    
+  }) %>% t()
+  
+sc2 <- sc2_vals %>% 
+  as_data_frame() %>% 
+  gather(model, bs_score) %>% 
+  filter(model != "data", model != "null") %>% 
+  mutate(number = stringr::str_extract(model, '[0-9]+') %>% as.numeric())
+
+ sc2_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc2_vals, refPredIndex = 2, invertBayes = F) %>% 
+    as_tibble(rownames = "model") %>% 
+    rename(bayes = value) 
+ 
+ 
+```
+
+Then plot SC2 results. Red indicates the reference model, light blue indicates a Bayes factor of <3 (statistically indistinguishable), while darker colors indicates a larger Bayes factor. The second model (a combination of the top two) is marginally better but statistically indistinguishable from the reference. Subsequent models are substantially less performant, with the exception of the combination of the top 4 and top 6 models, which  are again statistically indistinguishable from the reference.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+sc2_bf %>% filter(!model %in% c('data','null')) %>% arrange(bayes)
+
+sc2_final <- sc2 %>% 
+  filter(!model %in% c('data','null')) %>% 
+  left_join(sc2_bf) %>% 
+  mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
+                                    bayes<=3 ~ '<3',
+                                    bayes>=3 & bayes <5 ~ "3-5",
+                                    bayes>=5 & bayes <10 ~ "5-10",
+                                    bayes>=10 ~ ">10"))
+            
+          
+ensemble_inclusions <- pred_df %>% 
+  select(participant_name, rank) %>% 
+  distinct
+
+ensemble_inclusions
+
+ggplot(sc2_final, aes(x = number, y = -log2(bs_score), color = bayes_category, group = number)) +
+    geom_boxplot(outlier.shape = NA) +
+    theme_bw() + 
+  scale_color_manual(values = c("Reference"="#FB3640", '<3' = '#0585ED', "3-5" = "#124773",
+                                "5-10" = '#183247', ">10" = "#000000"),
+                      name = "Bayes Factor") +
+  labs(y = 'Bootstrapped SC2 score', x = 'Number of Models') +
+  annotate("text", x = 0.8,  y = 0, label = "netphar", angle = 90,hjust = 0, size = 2.8) +
+  annotate("text", x = 1.8,  y = 0, label = "+SBNB", angle = 90,hjust = 0, size = 2.8) +
+  annotate("text", x = 2.8,  y = 0, label = "+DREAM_2019_xielab", angle = 90,hjust = 0, size = 2.75) +
+  annotate("text", x = 3.8,  y = 0, label = "+Atom", angle = 90,hjust = 0, size = 2.8) +
+  annotate("text", x = 4.8,  y = 0, label = "+DMIS_PDA",angle = 90,hjust = 0, size = 2.8) +
+  annotate("text", x = 5.8,  y = 0, label = "+Theragen",angle = 90,hjust = 0, size = 2.8)+
+  annotate("text", x = 6.8,  y = 0, label = "+Signal",angle = 90,hjust = 0, size = 2.8)+
+  annotate("text", x = 7.8,  y = 0, label = "+AMberRland",angle = 90,hjust = 0, size = 2.8)+
+  annotate("text", x = 8.8,  y = 0, label = "+TeamAxolotl",angle = 90,hjust = 0, size = 2.8)+
+  annotate("text", x = 9.8,  y = 0, label = "+Senthamizhan V",angle = 90,hjust = 0, size = 2.8)+
+  scale_x_continuous(breaks= scales::pretty_breaks())
+```
+
+## Community Phase Teams Only, SC2
+
+As a final analysis, what if we only combine the three methods from the community phase teams?
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+query <- synTableQuery("SELECT * FROM syn22316156 where status = \'ACCEPTED\'")$filepath %>% 
+  read_csv() %>% 
+  filter(ROW_ID != 9696740, !is.na(writeUp))
+
+prediction_paths <- sapply(query$prediction_fileid, function(x){
+  synGet(x)$path
+})
+
+query <- mutate(query, participant_name = sapply(submitterid, get_user_or_team_names)) %>% 
+      mutate(participant_name = case_when(participant_name == "Hyunmin Kim" ~ "Theragen", 
+                                participant_name != "Hyunmin Kim" ~ participant_name)) 
+
+prediction_paths <- setNames(prediction_paths, query$participant_name)
+
+###filter for only community teams:
+community_teams <- c("netphar", "SBNB", "Atom")
+
+query <- filter(query, participant_name %in% community_teams)
+
+query <- query %>% 
+  arrange(desc(sc2_score)) %>% 
+  mutate(rank = 1:nrow(.)) 
+
+prediction_paths <- prediction_paths[names(prediction_paths) %in% community_teams]
+
+gold_df <- gold %>% 
+    select(-cmpd) %>% 
+    group_by(cmpd_id) %>% 
+    nest() %>% 
+    arrange(cmpd_id)
+  
+ pred_df<- lapply(names(prediction_paths), function(x){
+    read_csv(prediction_paths[[x]]) %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      mutate(participant_name = x) 
+  }) %>% bind_rows() %>% 
+   left_join(query %>% select(participant_name, rank))
+ 
+ median_preds_sc2 <- lapply(unique(pred_df$rank), function(i){
+   colname <- paste0('median_ensemble_',i)
+   foo <- pred_df %>%
+     filter(rank <= i) %>% 
+     group_by(target, cmpd_id) %>% 
+     summarize(!!colname := median(confidence)) %>% 
+     ungroup()
+   foo
+ }) 
+    
+pred_df_combined<- lapply(median_preds_sc2, function(x){
+    iter <- colnames(x)[3]
+    x %>% 
+      rename(confidence = iter) %>% 
+      filter(target %in% targs) %>% 
+      group_by(cmpd_id) %>%
+      arrange(-confidence, target) %>% 
+      nest() %>% 
+      arrange(cmpd_id) %>% 
+       rename({{iter}} := data)
+  }) %>% reduce(left_join, by = 'cmpd_id')
+
+
+sc2_vals <- sapply(1:1000, function(x){
+    
+    null_model <- template %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      group_by(cmpd_id) %>% 
+      arrange(-confidence, target) %>% 
+      sample_frac(1, replace = F) %>% 
+      select(-confidence) %>%
+      set_names(c('target', 'cmpd_id')) %>% 
+      filter(target %in% targs) %>%
+      nest() %>% 
+      ungroup() %>% 
+      mutate(cmpd_id= 1:32) %>% 
+      rename(null = data)
+    
+    join <- inner_join(gold_df, pred_df_combined, by = 'cmpd_id') %>% 
+      ungroup() %>% 
+      sample_n(32, replace = T) %>% 
+      mutate(cmpd_id= 1:32) %>% 
+      inner_join(null_model, by = 'cmpd_id') %>% 
+      select(-cmpd_id) 
+    
+    the_names <- colnames(join)
+    
+    join <- join %>% 
+      map(., function(a){
+        map2(.$data, a, function(x,y){
+          match(x$target, y$target) %>% unique() 
+        }) %>% unlist()
+      }) %>% bind_rows
+    
+    
+    colnames(join) <- the_names
+    
+    ps <- join %>% 
+      apply(., 2, function(x){
+        wilcox.test(x = x, y= .$null, paired = T, exact = NULL)$p.value
+      }) 
+    
+    
+    if(any(is.nan(ps))){
+      ps[is.nan(ps)] <- 1
+    }
+    ps
+    
+  }) %>% t()
+  
+sc2 <- sc2_vals %>% 
+  as_data_frame() %>% 
+  gather(model, bs_score) %>% 
+  filter(model != "data", model != "null") %>% 
+  mutate(number = stringr::str_extract(model, '[0-9]+') %>% as.numeric())
+
+ sc2_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc2_vals, refPredIndex = 4, invertBayes = F) %>% 
+    as_tibble(rownames = "model") %>% 
+    rename(bayes = value) 
+ 
+ 
+```
+
+Then plot SC2 results only looking at combinations of the community phase teams. Red indicates the reference model, light blue indicates a Bayes factor of <3 (statistically indistinguishable), while darker colors indicates a larger Bayes factor. The models (a combination of the top two or three) are marginally better or worse but statistically indistinguishable from the reference. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+sc2_bf %>% filter(!model %in% c('data','null')) %>% arrange(bayes)
+
+sc2_final <- sc2 %>% 
+  filter(!model %in% c('data','null')) %>% 
+  left_join(sc2_bf) %>% 
+  mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
+                                    bayes<=3 ~ '<3',
+                                    bayes>=3 & bayes <5 ~ "3-5",
+                                    bayes>=5 & bayes <10 ~ "5-10",
+                                    bayes>=10 ~ ">10"))
+            
+          
+ensemble_inclusions <- pred_df %>% 
+  select(participant_name, rank) %>% 
+  distinct
+
+ensemble_inclusions
+
+ggplot(sc2_final, aes(x = number, y = -log2(bs_score), color = bayes_category, group = number)) +
+    geom_boxplot(outlier.shape = NA) +
+    theme_bw() + 
+  scale_color_manual(values = c("Reference"="#FB3640", '<3' = '#0585ED', "3-5" = "#124773",
+                                "5-10" = '#183247', ">10" = "#000000"),
+                      name = "Bayes Factor") +
+  labs(y = 'Bootstrapped SC2 score', x = 'Number of Models') +
+  annotate("text", x = 1,  y = 15, label = "netphar", angle = 0,hjust = 0.5, size = 4) +
+  annotate("text", x = 2,  y = 15, label = "+SBNB", angle = 0,hjust = 0.5, size = 4) +
+  annotate("text", x = 3,  y = 15, label = "+Atom", angle = 0,hjust = 0.5, size = 4) +
+  scale_x_continuous(breaks= scales::pretty_breaks(3))
+```

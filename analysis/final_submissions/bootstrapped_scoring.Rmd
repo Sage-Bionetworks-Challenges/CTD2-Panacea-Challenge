@@ -24,20 +24,50 @@ library(synapser)
 library(forcats)
 synLogin()
 
-query <- synTableQuery('select * from syn21628283 where submissionId < 9699164')$asDataFrame()
+set.seed(27651030)
+
+query <- synTableQuery('select * from syn21628283')$asDataFrame()
 
 prediction_paths <- sapply(query$id, function(x){
   synGet(x)$path
 })
 
-suppressMessages(setNames(prediction_paths, query$teamId))
 
-frac_overlap <- function(gold, pred){
+get_user_or_team_names <- function(id){
+ name <- try(synGetTeam(id)$name, silent = T) ##try to get the team name from id 
+ if(class(name)=='try-error'){ ##if it is not a team, will return error, so then try to get user profile
+ try({
+   prof <- synGetUserProfile(id = id) ##get first and last name
+   fn <- prof$firstName
+   ln <- prof$lastName
+   if(is.null(fn) | is.null(ln)){
+     un <- prof$userName
+     return(un) 
+   }else if(fn == "" | ln == ""){ ##if empty, get username instead
+     un <- prof$userName
+     return(un)
+   }else{
+     return(paste(fn, ln))
+   }
+   })
+   }else{
+     return(name)
+   }
+}
+
+query <- mutate(query, participant_name = sapply(userId, get_user_or_team_names)) %>% 
+      mutate(participant_name = case_when(participant_name == "Hyunmin Kim" ~ "Theragen", 
+                                participant_name != "Hyunmin Kim" ~ participant_name)) 
+
+prediction_paths <- setNames(prediction_paths, query$participant_name)
+
+ frac_overlap <- function(gold, pred){
   sum(gold %in% pred)/length(gold)
 }
 
 gold_path <- synGet("syn21302164")$path
 template_path <- synGet('syn21321426')$path
+
 
 ```
 
@@ -98,7 +128,7 @@ Read in prediction files, slice out top 10 predictions for each compound, and ne
   }) %>% reduce(left_join, by = 'cmpd_id')
   
 
-  sc1_vals <- sapply(1:1000, function(x){
+  sc1_vals <- sapply(1:10000, function(x){
     
     null_model <- template %>% 
       gather(cmpd_id, confidence ,-target) %>% 
@@ -173,7 +203,7 @@ Repeat, but for SC2, which is the significance of the target ranks as compared t
        rename({{x}} := data)
    }) %>% reduce(left_join, by = 'cmpd_id')
   
-  sc2_vals <- sapply(1:1000, function(x){
+  sc2_vals <- sapply(1:10000, function(x){
     
     null_model <- template %>% 
       gather(cmpd_id, confidence ,-target) %>% 
@@ -232,31 +262,40 @@ Use our `challengescoring` package to compute Bayes factors using a matrix of sc
    
   sc1_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals, refPredIndex = 5, invertBayes = F) %>% 
     as_tibble(rownames = "submission") %>% 
-    rename(bayes = value)
+    rename(bayes = value) %>% 
+  mutate(submission = case_when(submission == "Bence Szalai" ~ "Baseline", 
+                                submission != "Bence Szalai" ~ submission))
   
   sc2_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc2_vals, refPredIndex = 10, invertBayes = F) %>% 
-  as_tibble(rownames = "submission") %>% 
-    rename(bayes = value)
+    as_tibble(rownames = "submission") %>% 
+    rename(bayes = value) %>% 
+  mutate(submission = case_when(submission == "Bence Szalai" ~ "Baseline", 
+                                submission != "Bence Szalai" ~ submission))
+  
 ```
 
 Then plot SC1 results. Red indicates the reference model, orange indicates a Bayes factor of 3-5, grey indicates a Bayes factor of >5.
 
 ```{r echo=TRUE}
-
+sc1_bf %>% filter(!submission %in% c('data','null')) %>% arrange(bayes)
 
 sc1_final <- sc1 %>% 
+    mutate(submission = case_when(submission == "Bence Szalai" ~ "Baseline", 
+                                submission != "Bence Szalai" ~ submission)) %>% 
   filter(!submission %in% c('data','null')) %>% 
   left_join(sc1_bf) %>% 
   mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
-                                    bayes <3 ~ '<3',
-                                    bayes>3 & bayes<5 ~ '3-5',
-                                    bayes>5 ~ ">5"))
+                                    bayes<=3 ~ '<3',
+                                    bayes>=3 & bayes <5 ~ "3-5",
+                                    bayes>=5 & bayes <10 ~ "5-10",
+                                    bayes>=10 ~ ">10"))
             
 ggplot(sc1_final) +
-    geom_boxplot(aes(x = fct_reorder(submission, -bs_score), y = -log2(bs_score), color = bayes_category)) +
+    geom_boxplot(aes(x = fct_reorder(submission, -bs_score, .fun = mean), y = -log2(bs_score), color = bayes_category), outlier.shape = NA) +
     theme_bw() + 
-  scale_color_manual(values = c("Reference"="red","3-5" = "orange", ">5"= "darkgrey"),
-                     name = "Bayes Factor") +
+  scale_color_manual(values = c("Reference"="#d32e36", '<3' = '#cf4d6f', "3-5" = "#cc7e85",
+                                "5-10" = '#c5afa4', ">10" = "#a8a6a4"),
+                      name = "Bayes Factor") +
   coord_flip() +
   labs(y = 'Bootstrapped SC1 score', x = 'Submission')
 
@@ -267,20 +306,24 @@ Looking at these results, the top performer is not tied with any other valid sub
 Then plot SC2 results. Red indicates the reference model, orange indicates a Bayes factor of 3-5, grey indicates a Bayes factor of >5.
 
 ```{r echo=TRUE}
+sc2_bf %>% filter(!submission %in% c('data','null')) %>% arrange(bayes)
 
 sc2_final <- sc2 %>% 
+  mutate(submission = case_when(submission == "Bence Szalai" ~ "Baseline", 
+                                submission != "Bence Szalai" ~ submission)) %>% 
   filter(!submission %in% c('data','null')) %>% 
   left_join(sc2_bf) %>% 
   mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
-                                    bayes <3 ~ '<3',
-                                    bayes>3 & bayes<5 ~ '3-5',
-                                    bayes>5 ~ ">5"))
-
+                                    bayes<=3 ~ '<3',
+                                    bayes>=3 & bayes <5 ~ "3-5",
+                                    bayes>=5 & bayes <10 ~ "5-10",
+                                    bayes>=10 ~ ">10"))
 ggplot(sc2_final) +
-    geom_boxplot(aes(x = fct_reorder(submission, -bs_score), y = -log2(bs_score), color = bayes_category)) +
+    geom_boxplot(aes(x = fct_reorder(submission, -bs_score, .fun = median), y = -log2(bs_score), color = bayes_category), outlier.shape = NA) +
   theme_bw() + 
-  scale_color_manual(values = c("Reference"="red","3-5" = "orange", ">5"= "darkgrey"),
-                     name = "Bayes Factor") +
+  scale_color_manual(values = c("Reference"="#d32e36", '<3' = '#cf4d6f', "3-5" = "#cc7e85",
+                                "5-10" = '#c5afa4', ">10" = "#a8a6a4"),
+                      name = "Bayes Factor") +
   coord_flip() +
   labs(y = 'Bootstrapped SC2 score', x = 'Submission')
 
@@ -289,3 +332,259 @@ ggplot(sc2_final) +
 
 Looking at these results, the top performer is not tied with any other valid submission, though one comes close to a tie. 
 
+
+_______
+
+# Comparison to baseline model
+
+Use our `challengescoring` package to compute Bayes factors using a matrix of scores for SC1 and SC2, setting the `refPredIndex` as the number of the column that contains the *baseline* prediction (the reference prediction). 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+computeBayesFactorWhereRefIsNotBest <- function(bootstrapMetricMatrix,
+                               refPredIndex,
+                               invertBayes){
+
+    M <- as.data.frame(bootstrapMetricMatrix - bootstrapMetricMatrix[,refPredIndex])
+    K <- apply(M ,2, function(x) {
+      k <- sum(x >= 0)/sum(x < 0)
+      if(sum(x >= 0) > sum(x < 0)){
+      return(k)
+      }else{
+      return(1/k)
+      }
+    })
+    if(invertBayes == T){K <- 1/K}
+    K[refPredIndex] <- 0
+
+    return(K)
+}
+   
+  sc1_bf <- computeBayesFactorWhereRefIsNotBest(bootstrapMetricMatrix = sc1_vals, refPredIndex = 12, invertBayes = F) %>% 
+    as_tibble(rownames = "submission") %>% 
+    rename(bayes = value) %>% 
+  mutate(submission = case_when(submission == "Bence Szalai" ~ "Baseline", 
+                                submission != "Bence Szalai" ~ submission))
+  
+  sc2_bf <- computeBayesFactorWhereRefIsNotBest(bootstrapMetricMatrix = sc2_vals, refPredIndex = 12, invertBayes = F) %>% 
+  as_tibble(rownames = "submission") %>% 
+    rename(bayes = value) %>% 
+  mutate(submission = case_when(submission == "Bence Szalai" ~ "Baseline", 
+                                submission != "Bence Szalai" ~ submission))
+```
+
+Then plot SC1 results. Red indicates the reference model, dark pink indicates a Bayes factor of <3, pink: 3-5, silver-pink: 5-10, grey: >10.
+
+```{r echo=TRUE}
+sc1_bf %>% filter(!submission %in% c('data','null')) %>% arrange(bayes)
+
+sc1_final <- sc1 %>% 
+  mutate(submission = case_when(submission == "Bence Szalai" ~ "Baseline", 
+                                submission != "Bence Szalai" ~ submission)) %>% 
+  filter(!submission %in% c('data','null')) %>% 
+  left_join(sc1_bf) %>% 
+  mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
+                                    bayes<=3 ~ '<3',
+                                    bayes>=3 & bayes <5 ~ "3-5",
+                                    bayes>=5 & bayes <10 ~ "5-10",
+                                    bayes>=10 ~ ">10"))
+            
+ggplot(sc1_final) +
+    geom_boxplot(aes(x = fct_reorder(submission, -bs_score, .fun = mean), y = -log2(bs_score), color = bayes_category), outlier.shape = NA) +
+    theme_bw() + 
+  scale_color_manual(values = c("Reference"="#d32e36", '<3' = '#cf4d6f', "3-5" = "#cc7e85",
+                                "5-10" = '#c5afa4', ">10" = "#a8a6a4"),
+                      name = "Bayes Factor") +
+  coord_flip() +
+  labs(y = 'Bootstrapped SC1 score', x = 'Submission')
+
+```
+
+Looking at these results, the baseline is tied with netphar and SBNB for this metric,.
+
+Then plot SC2 results. Red indicates the reference model, dark pink indicates a Bayes factor of <3, pink: 3-5, silver-pink: 5-10, grey: >10.
+
+```{r echo=TRUE}
+sc2_bf %>% filter(!submission %in% c('data','null')) %>% arrange(bayes)
+
+sc2_final <- sc2 %>% 
+  mutate(submission = case_when(submission == "Bence Szalai" ~ "Baseline", 
+                                submission != "Bence Szalai" ~ submission)) %>% 
+  filter(!submission %in% c('data','null')) %>% 
+  left_join(sc2_bf) %>% 
+  mutate(bayes_category = case_when(bayes == 0 ~ 'Reference',
+                                    bayes<=3 ~ '<3',
+                                    bayes>=3 & bayes <5 ~ "3-5",
+                                    bayes>=5 & bayes <10 ~ "5-10",
+                                    bayes>=10 ~ ">10"))
+
+ggplot(sc2_final) +
+    geom_boxplot(aes(x = fct_reorder(submission, -bs_score, .fun = median), y = -log2(bs_score), color = bayes_category), outlier.shape = NA) +
+  theme_bw() + 
+  scale_color_manual(values = c("Reference"="#d32e36", '<3' = '#cf4d6f', "3-5" = "#cc7e85",
+                                "5-10" = '#c5afa4', ">10" = "#a8a6a4"),
+                      name = "Bayes Factor") +
+  coord_flip() +
+  labs(y = 'Bootstrapped SC2 score', x = 'Submission')
+
+
+```
+
+Looking at these results, the baseline model is tied with Hyunmin Kim (team theragen)
+
+
+##Top performer validation
+
+Finally, let's validate the prediction files from the top performers' and "honorable mention" Docker containers. We ran their submitted docker containers by hand to generate these prediction files - we'll now verify that they are matched to the submitted prediction files to demonstrate that their submitted codebase is representative of their submitted prediction. 
+
+Given that some of these methods, like neural nets, can use random initiations or have other uncontrollable randomness, we'll use a bootstrapping method like above to determine if the prediction files are equivalent, as they may not be exactly numerically identical. 
+
+```{r echo=TRUE}
+
+atom_docker <- synGet("syn21769349")$path 
+atom_sub <- prediction_paths[['Atom']]
+  
+netphar_docker <- synGet("syn21777036")$path
+netphar_sub <- prediction_paths[['netphar']]
+
+sbnb_docker <- synGet("syn21777122")$path 
+sbnb_sub <- prediction_paths[['SBNB']]
+
+prediction_paths_docker <- list("atom_docker" = atom_docker,
+                         "atom_submission" = atom_sub,
+                         "netphar_docker" = netphar_docker,
+                         "netphar_submission" = netphar_sub,
+                         "sbnb_docker" = sbnb_docker,
+                         "sbnb_submission" = sbnb_sub)
+
+template <- read_csv(template_path) %>% filter(target %in% targs)
+  
+  ###SC1 
+  
+  gold_df <- gold %>% 
+    select(-cmpd) %>% 
+    group_by(cmpd_id) %>% 
+    nest() %>% 
+    arrange(cmpd_id)
+  
+  pred_df<- lapply(names(prediction_paths_docker), function(x){
+    read_csv(prediction_paths_docker[[x]]) %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      filter(target %in% targs) %>% 
+      group_by(cmpd_id) %>% 
+      arrange(-confidence, target) %>% 
+      slice(1:10) %>%  ##instead of top n. We eliminate ties alphabetically!
+      nest() %>% 
+      arrange(cmpd_id) %>% 
+      rename({{x}} := data)
+  }) %>% reduce(left_join, by = 'cmpd_id')
+  
+
+  sc1_vals <- suppressMessages(sapply(1:1000, function(x){
+    
+    null_model <- template %>% 
+      gather(cmpd_id, confidence ,-target) %>% 
+      group_by(cmpd_id) %>% 
+      arrange(-confidence, target) %>% 
+      sample_n(10, replace = F) %>% 
+      select(-confidence) %>%
+      set_names(c('target', 'cmpd_id')) %>% 
+      filter(target %in% targs) %>%
+      nest() %>% 
+      ungroup() %>% 
+      mutate(cmpd_id= 1:32) %>% 
+      rename(null = data)
+  
+  
+   join <- inner_join(gold_df, pred_df, by = 'cmpd_id') %>% 
+    ungroup() %>% 
+     sample_n(32, replace = T) %>% 
+     mutate(cmpd_id= 1:32) %>% 
+     inner_join(null_model) %>% 
+     select(-cmpd_id) 
+   
+   the_names <- colnames(join)
+   
+   join <- join %>% 
+     map(., function(a){
+       map2(.$data, a, function(x,y){
+       frac_overlap(x$target, y$target) 
+       }) %>% plyr::ldply()
+     }) %>% bind_cols
+   
+   colnames(join) <- the_names
+
+   ps <- join %>% 
+     apply(., 2, function(x){
+       suppressWarnings(wilcox.test(x = x, y= .$null, paired = T, exact = NULL)$p.value)
+       }) 
+    
+    
+    if(any(is.nan(ps))){
+      ps[is.nan(ps)] <- 1
+    }
+    ps
+    
+  })) %>% t()
+  
+  # sc1 <- mean(-log2(sc1_vals)) %>% signif(5)
+  
+  sc1 <- sc1_vals %>% 
+    as_data_frame() %>% 
+    gather(submission, bs_score)
+
+
+```
+
+
+##Atom 
+
+```{r echo=TRUE}
+
+if(all_equal(sc1_vals[,2],sc1_vals[,3])){
+  print('Atom submissions identical')
+} else {
+  atom_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals[,2:3], refPredIndex = 2, invertBayes = F) %>% 
+  as_tibble(rownames = "submission") %>% 
+    rename(bayes = value) 
+  
+  print(atom_bf)
+}
+
+
+```
+
+
+## netphar
+
+```{r echo=TRUE}
+
+if(all_equal(sc1_vals[,4],sc1_vals[,5])){
+  print('netphar submissions identical')
+} else {
+  netphar_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals[,4:5], refPredIndex = 2, invertBayes = F) %>% 
+  as_tibble(rownames = "submission") %>% 
+    rename(bayes = value) 
+  
+  print(netphar_bf)
+}
+
+
+```
+
+#SBNB
+
+```{r echo=TRUE}
+
+if(all_equal(sc1_vals[,6],sc1_vals[,7])){
+  print('SBNB submissions identical')
+} else {
+  sbnb_bf <- challengescoring::computeBayesFactor(bootstrapMetricMatrix = sc1_vals[,6:7], refPredIndex = 2, invertBayes = F) %>% 
+  as_tibble(rownames = "submission") %>% 
+    rename(bayes = value) 
+  
+  print(sbnb_bf)
+}
+
+
+```
